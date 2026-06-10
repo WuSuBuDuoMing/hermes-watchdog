@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hermes Monitor - cc Switch 状态监控</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ============================== -->
+  <!-- 顶部导航栏 -->
+  <!-- ============================== -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <a href="/" class="back-link" title="返回首页">← 首页</a>
+      <div class="logo">
+        <span class="logo-icon">H</span>
+        <span class="logo-text">Hermes Monitor</span>
+      </div>
+      <div class="sse-status" id="sse-status">
+        <span class="sse-dot"></span>
+        <span class="sse-label">实时连接</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="export-btn" id="export-btn" title="导出数据">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        导出
+      </button>
+      <div class="server-time" id="server-time"></div>
+      <div class="topbar-badge">v1.0.0</div>
+    </div>
+  </header>
+
+  <!-- ============================== -->
+  <!-- 主内容区域 -->
+  <!-- ============================== -->
+  <main class="dashboard">
+
+    <!-- 在线状态横幅 -->
+    <div class="online-banner" id="online-banner">
+      <span class="online-banner__dot"></span>
+      <span class="online-banner__text">在线</span>
+      <span class="online-banner__sep">|</span>
+      <span class="online-banner__detail">连接 cc Switch 代理服务</span>
+      <span class="online-banner__sep">|</span>
+      <span class="online-banner__source">数据来源: 检查中...</span>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 第一行：顶部状态栏 —— 4 个核心指标卡片 -->
+    <!-- ========================================== -->
+    <section class="stats-row" id="stats-row">
+      <!-- 运行状态 -->
+      <div class="stat-card stat-card--status">
+        <div class="stat-card__icon">
+          <div class="pulse-ring"></div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+            <path d="M8 12l3 3 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="stat-card__info">
+          <span class="stat-card__label">运行状态</span>
+          <span class="stat-card__value" id="stat-status">检查中...</span>
+        </div>
+        <div class="stat-card__tag tag--success" id="stat-status-tag">CHECKING</div>
+      </div>
+
+      <!-- Token 总量 -->
+      <div class="stat-card stat-card--tokens">
+        <div class="stat-card__icon stat-card__icon--blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="stat-card__info">
+          <span class="stat-card__label">Token 总量</span>
+          <span class="stat-card__value" id="stat-tokens">0</span>
+        </div>
+      </div>
+
+      <!-- 活跃连接 -->
+      <div class="stat-card stat-card--uptime">
+        <div class="stat-card__icon stat-card__icon--purple">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="stat-card__info">
+          <span class="stat-card__label">活跃连接</span>
+          <span class="stat-card__value" id="stat-uptime">0</span>
+        </div>
+      </div>
+
+      <!-- 请求成功率 -->
+      <div class="stat-card stat-card--rate">
+        <div class="stat-card__icon stat-card__icon--green">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="22 4 12 14.01 9 11.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="stat-card__info">
+          <span class="stat-card__label">请求成功率</span>
+          <span class="stat-card__value" id="stat-rate">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 第二行：Provider 状态 + 系统信息 -->
+    <!-- ========================================== -->
+    <section class="agents-section">
+
+      <!-- Provider 状态卡片 -->
+      <div class="card card--status">
+        <div class="card__header">
+          <h2 class="card__title">cc Switch 状态</h2>
+          <span class="card__subtitle">代理服务信息</span>
+        </div>
+        <div class="agent-status-list" id="agent-status-list">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+      </div>
+
+      <!-- 系统信息卡片 -->
+      <div class="card card--agents">
+        <div class="card__header">
+          <h2 class="card__title">系统信息</h2>
+          <span class="card__subtitle">本地服务器</span>
+        </div>
+        <div class="agents-grid" id="agents-grid">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 第三行：请求趋势图 + Token 使用明细 -->
+    <!-- ========================================== -->
+    <section class="charts-row">
+      <!-- 请求趋势图 -->
+      <div class="card card--chart">
+        <div class="card__header">
+          <h2 class="card__title">请求趋势</h2>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot legend-dot--green"></span>成功</span>
+            <span class="legend-item"><span class="legend-dot legend-dot--red"></span>失败</span>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-requests"></canvas>
+        </div>
+      </div>
+
+      <!-- Token 使用明细 -->
+      <div class="card card--breakdown">
+        <div class="card__header">
+          <h2 class="card__title">Token 使用明细</h2>
+          <span class="card__subtitle" id="token-total">总计 0</span>
+        </div>
+        <div class="breakdown-list" id="breakdown-list">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 第四行：请求统计饼图 + 历史对话 -->
+    <!-- ========================================== -->
+    <section class="bottom-row">
+      <!-- 请求统计饼图 -->
+      <div class="card card--pie">
+        <div class="card__header">
+          <h2 class="card__title">请求统计</h2>
+        </div>
+        <div class="chart-container chart-container--pie">
+          <canvas id="chart-models"></canvas>
+        </div>
+        <div class="pie-legend" id="pie-legend">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+      </div>
+
+      <!-- 历史对话列表 -->
+      <div class="card card--conversations">
+        <div class="card__header">
+          <h2 class="card__title">历史对话</h2>
+          <span class="card__subtitle" id="conversation-count">0 个会话</span>
+        </div>
+        <div class="conversation-list" id="conversation-list">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 第五行：系统健康度 -->
+    <!-- ========================================== -->
+    <section class="health-row">
+      <!-- 系统健康度 -->
+      <div class="card card--health card--full">
+        <div class="card__header">
+          <h2 class="card__title">系统健康度</h2>
+          <span class="card__subtitle" id="health-score">--</span>
+        </div>
+        <div class="health-grid" id="health-grid">
+          <div class="health-item">
+            <div class="health-item__label">CPU 使用率</div>
+            <div class="health-item__bar"><div class="health-item__fill" id="health-cpu" style="width:0%"></div></div>
+            <div class="health-item__value" id="health-cpu-val">--%</div>
+          </div>
+          <div class="health-item">
+            <div class="health-item__label">内存使用率</div>
+            <div class="health-item__bar"><div class="health-item__fill health-item__fill--purple" id="health-mem" style="width:0%"></div></div>
+            <div class="health-item__value" id="health-mem-val">--%</div>
+          </div>
+          <div class="health-item">
+            <div class="health-item__label">平均响应时间</div>
+            <div class="health-item__bar"><div class="health-item__fill health-item__fill--cyan" id="health-latency" style="width:0%"></div></div>
+            <div class="health-item__value" id="health-latency-val">--ms</div>
+          </div>
+          <div class="health-item">
+            <div class="health-item__label">错误率</div>
+            <div class="health-item__bar"><div class="health-item__fill health-item__fill--red" id="health-error" style="width:0%"></div></div>
+            <div class="health-item__value" id="health-error-val">--%</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 第六行：实时日志流 -->
+    <!-- ========================================== -->
+    <section class="log-section">
+      <div class="card card--log">
+        <div class="card__header">
+          <h2 class="card__title">
+            <span class="log-indicator"></span>
+            实时日志流
+          </h2>
+          <span class="card__subtitle" id="log-count">0 条</span>
+        </div>
+        <div class="log-stream" id="log-stream">
+          <!-- 日志条目由 JS 动态渲染 -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================== -->
+  <!-- 底部 -->
+  <!-- ============================== -->
+  <footer class="footer">
+    <span>Hermes Monitor v1.0.0</span>
+    <span class="footer-sep">|</span>
+    <span>cc Switch 状态监控</span>
+    <span class="footer-sep">|</span>
+    <span id="footer-update">最后更新: --</span>
+  </footer>
+
+  <!-- ============================== -->
+  <!-- JS 脚本 -->
+  <!-- ============================== -->
+  <script src="js/charts.js"></script>
+  <script src="js/sse.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+</html>
