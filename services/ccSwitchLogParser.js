@@ -1,11 +1,12 @@
 /**
- * CC Switch 日志解析器（优化版本）
+ * CC Switch 日志解析器
  * 从所有 cc-switch 日志文件中提取真实的使用统计数据
  */
 
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { formatTokenCount } = require('./utils');
 
 const LOG_DIR = 'C:/Users/zph/.cc-switch/logs';
 
@@ -170,31 +171,20 @@ async function parseUsageStats() {
   return cachedStats;
 }
 
-/**
- * 格式化数字
- */
-function formatNumber(num) {
-  if (num >= 100000000) return (num / 100000000).toFixed(2) + ' 亿';
-  if (num >= 10000) return (num / 10000).toFixed(1) + ' 万';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
-}
-
-// 导出
 module.exports = {
   parseUsageStats,
-  formatNumber,
+  formatTokenCount,
 };
 
 // 如果直接运行此文件，输出统计
 if (require.main === module) {
   parseUsageStats().then(stats => {
     console.log('=== CC Switch 使用统计 ===');
-    console.log(`总 Token: ${formatNumber(stats.totalTokens)} (${stats.totalTokens})`);
-    console.log(`输入 Token: ${formatNumber(stats.inputTokens)}`);
-    console.log(`输出 Token: ${formatNumber(stats.outputTokens)}`);
-    console.log(`缓存读取: ${formatNumber(stats.cacheReadTokens)}`);
-    console.log(`缓存创建: ${formatNumber(stats.cacheCreationTokens)}`);
+    console.log(`总 Token: ${formatTokenCount(stats.totalTokens)} (${stats.totalTokens})`);
+    console.log(`输入 Token: ${formatTokenCount(stats.inputTokens)}`);
+    console.log(`输出 Token: ${formatTokenCount(stats.outputTokens)}`);
+    console.log(`缓存读取: ${formatTokenCount(stats.cacheReadTokens)}`);
+    console.log(`缓存创建: ${formatTokenCount(stats.cacheCreationTokens)}`);
     console.log(`总请求: ${stats.totalRequests}`);
     console.log(`成功请求: ${stats.successRequests}`);
     console.log(`失败请求: ${stats.failedRequests}`);

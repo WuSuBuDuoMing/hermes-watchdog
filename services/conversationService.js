@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { formatTokenCount } = require('./utils');
 
 const LOG_DIR = 'C:/Users/zph/.cc-switch/logs';
 
@@ -90,22 +91,10 @@ async function extractConversations(limit = 50) {
   return result;
 }
 
-/**
- * 格式化 Token 数量
- */
-function formatTokenCount(num) {
-  if (num >= 100000000) return (num / 100000000).toFixed(2) + ' 亿';
-  if (num >= 10000) return (num / 10000).toFixed(1) + ' 万';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
-}
-
 module.exports = {
   extractConversations,
-  formatTokenCount,
 };
 
-// 如果直接运行此文件
 if (require.main === module) {
   extractConversations(10).then(convs => {
     console.log('=== 最近 10 个对话 ===');

@@ -16,7 +16,7 @@ const { parseUsageStats } = require('./ccSwitchLogParser');
 const { databaseExists, getDatabaseStats } = require('./ccSwitchDbReader');
 const { checkAlerts } = require('./alertService');
 
-// cc Switch 配置
+/** cc Switch 代理服务地址 */
 const CC_SWITCH_HOST = '127.0.0.1';
 const CC_SWITCH_PORT = 15721;
 
@@ -308,7 +308,9 @@ async function getStatusSummary() {
 
 /**
  * 启动真实数据推送
- * 每 3 秒从 cc Switch 拉取一次状态并广播
+ * 每 3 秒从 cc Switch 拉取一次状态并通过 SSE 广播给所有客户端。
+ * 同时记录请求历史用于趋势图渲染。
+ * @param {import('express').Express} app - Express 应用实例
  */
 function startDataSimulation(app) {
   const broadcast = app.locals.broadcastSSE;
