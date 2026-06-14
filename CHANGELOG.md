@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.0 (2026-06-14)
+
+### Changed
+- Security policy, documentation enhancements, open-source best practices
+
 ## v1.2.0 (2026-06-14)
 
 ### Changed
