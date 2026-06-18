@@ -1,16 +1,19 @@
 /**
- * Hermes Monitor - 数据导出功能
- * 支持导出使用统计数据为 JSON 格式
+ * @module exportService
+ * @description Data export functionality for Hermes Monitor.
+ *
+ * Exports usage statistics to timestamped JSON files in the `exports/` directory.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// 导出目录
+/** Absolute path to the export output directory. */
 const EXPORT_DIR = path.join(__dirname, '../exports');
 
 /**
- * 确保导出目录存在
+ * Ensure the export directory exists, creating it recursively if necessary.
+ * @returns {void}
  */
 function ensureExportDir() {
   if (!fs.existsSync(EXPORT_DIR)) {
@@ -19,9 +22,24 @@ function ensureExportDir() {
 }
 
 /**
- * 导出使用统计数据
- * @param {Object} stats - 统计数据
- * @returns {string} - 导出文件路径
+ * Export current usage statistics to a JSON file.
+ *
+ * Creates a timestamped file in the `exports/` directory containing
+ * token breakdown, request metrics, system info, and recent requests.
+ *
+ * @param {Object} stats - Status summary object from {@link getStatusSummary}.
+ * @param {Object}  stats.tokenStats           - Token usage data.
+ * @param {number}  stats.tokenStats.totalTokens  - Total tokens consumed.
+ * @param {number}  stats.tokenStats.inputTokens  - Input tokens.
+ * @param {number}  stats.tokenStats.outputTokens - Output tokens.
+ * @param {string}  stats.currentProvider       - Active AI provider name.
+ * @param {number}  stats.totalRequests         - Total requests made.
+ * @param {number}  stats.successRequests       - Successful requests.
+ * @param {number}  stats.failedRequests        - Failed requests.
+ * @param {number}  stats.successRate           - Success rate percentage.
+ * @param {Object}  stats.system                - System monitoring data.
+ * @param {Array}   stats.recentRequests        - Recent request details.
+ * @returns {string} Absolute path to the exported JSON file.
  */
 function exportUsageStats(stats) {
   ensureExportDir();
@@ -64,8 +82,11 @@ function exportUsageStats(stats) {
 }
 
 /**
- * 获取导出文件列表
- * @returns {Array} - 文件列表
+ * List all previously exported JSON files.
+ *
+ * Returns file metadata sorted by modification time (newest first).
+ *
+ * @returns {Array<{name: string, path: string, size: number, time: Date}>} Export file list.
  */
 function getExportList() {
   ensureExportDir();

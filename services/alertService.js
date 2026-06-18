@@ -1,9 +1,19 @@
 /**
- * Hermes Monitor - 告警功能
- * 当 Token 使用量超过阈值时发送通知
+ * @module alertService
+ * @description Alert threshold detection for Hermes Monitor.
+ *
+ * Monitors token usage and error rate against configurable thresholds.
+ * Includes a cooldown mechanism to prevent alert storms.
  */
 
-// 告警配置
+/**
+ * Alert threshold configuration.
+ * @type {Object}
+ * @property {number} tokenWarning   - Token count threshold for warning-level alerts
+ * @property {number} tokenCritical  - Token count threshold for critical-level alerts
+ * @property {number} errorRateWarning  - Error rate percentage for warning-level alerts
+ * @property {number} errorRateCritical - Error rate percentage for critical-level alerts
+ */
 const ALERT_THRESHOLDS = {
   tokenWarning: 100000000,    // 1 亿 Token 警告
   tokenCritical: 500000000,  // 5 亿 Token 严重警告
@@ -11,14 +21,26 @@ const ALERT_THRESHOLDS = {
   errorRateCritical: 10,     // 10% 错误率严重警告
 };
 
-// 告警状态
+/**
+ * Timestamp of the last fired alert (epoch ms).
+ * @type {number}
+ */
 let lastAlertTime = 0;
-const ALERT_COOLDOWN = 300000; // 5 分钟冷却时间
+
+/** Cooldown period in milliseconds between alert batches. */
+const ALERT_COOLDOWN = 300000; // 5 minutes
 
 /**
- * 检查是否需要发送告警
- * @param {Object} stats - 统计数据
- * @returns {Array} - 告警列表
+ * Evaluate summary statistics against alert thresholds.
+ *
+ * Returns an empty array when the cooldown period has not yet elapsed
+ * or when no thresholds are exceeded.
+ *
+ * @param {Object} stats - Status summary object from {@link getStatusSummary}.
+ * @param {Object} stats.tokenStats       - Token usage breakdown.
+ * @param {number} stats.tokenStats.totalTokens - Total tokens consumed.
+ * @param {number} stats.errorRate         - Current error rate as a percentage.
+ * @returns {Array<{level: string, message: string, timestamp: string}>} List of alert objects.
  */
 function checkAlerts(stats) {
   const alerts = [];
@@ -70,7 +92,8 @@ function checkAlerts(stats) {
 }
 
 /**
- * 获取告警配置
+ * Return a shallow copy of the current alert threshold configuration.
+ * @returns {Object} The alert thresholds object.
  */
 function getAlertConfig() {
   return ALERT_THRESHOLDS;

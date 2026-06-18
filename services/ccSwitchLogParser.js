@@ -1,6 +1,10 @@
 /**
- * CC Switch 日志解析器
- * 从所有 cc-switch 日志文件中提取真实的使用统计数据
+ * @module ccSwitchLogParser
+ * @description Log file parser for cc Switch usage statistics.
+ *
+ * Parses all `.log` files in the cc Switch log directory to extract
+ * token usage, request counts, session data, and recent request details.
+ * Uses a 30-second cache to avoid re-parsing on every request.
  */
 
 const fs = require('fs');

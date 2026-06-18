@@ -1,6 +1,9 @@
 /**
- * CC Switch SQLite 数据库读取器
- * 从 CC Switch 的 SQLite 数据库中读取真实的使用统计数据
+ * @module ccSwitchDbReader
+ * @description SQLite database reader for cc Switch usage statistics.
+ *
+ * Reads token usage, request counts, and session data from cc Switch's
+ * SQLite database. Falls back gracefully when better-sqlite3 is unavailable.
  */
 
 const fs = require('fs');

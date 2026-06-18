@@ -1,6 +1,9 @@
 /**
- * CC Switch 历史对话提取器
- * 从日志文件中提取完整的对话历史
+ * @module conversationService
+ * @description Conversation history extractor for Hermes Monitor.
+ *
+ * Reads cc Switch log files and groups request entries by session ID,
+ * producing aggregated conversation records with latency and token stats.
  */
 
 const fs = require('fs');

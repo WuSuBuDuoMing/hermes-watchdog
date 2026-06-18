@@ -1,7 +1,9 @@
 /**
- * Hermes Monitor - 通用工具函数
+ * @module utils
+ * @description Shared utility functions for Hermes Monitor.
  *
- * 所有格式化和计算的单一来源，消除跨文件重复。
+ * Single source of truth for all formatting and calculation helpers,
+ * eliminating duplication across service modules.
  */
 
 /**

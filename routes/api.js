@@ -1,7 +1,12 @@
 /**
- * Hermes Monitor - API 路由
+ * @module routes/api
+ * @description Express REST API routes for Hermes Monitor.
  *
- * 所有数据来自 cc Switch 真实 API + 数据库
+ * Mounts all `/api/*` endpoints that serve health checks, status data,
+ * summaries, trends, conversations, exports, and export listings.
+ *
+ * All data originates from the cc Switch proxy service, its SQLite database,
+ * and log files -- no mock or simulated data is used.
  */
 
 const express = require('express');

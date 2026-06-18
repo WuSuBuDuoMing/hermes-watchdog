@@ -1,13 +1,14 @@
 /**
- * Hermes Monitor - 真实数据服务
+ * @module mockData
+ * @description Real data aggregation and SSE broadcast service for Hermes Monitor.
  *
- * 数据来源：
- * 1. cc Switch SQLite 数据库 - Token 使用量、模型信息（权威数据）
- * 2. cc Switch 本地代理服务 (http://127.0.0.1:15721) - API 调用统计
- * 3. cc Switch 日志文件 - 最近请求详情（备用）
- * 4. Node.js os 模块 - 真实系统监控（CPU、内存）
+ * Orchestrates data collection from multiple sources:
+ * 1. **cc Switch SQLite database** -- Token usage and model info (authoritative)
+ * 2. **cc Switch HTTP API** (`http://127.0.0.1:15721`) -- Live request statistics
+ * 3. **cc Switch log files** -- Recent request details (fallback)
+ * 4. **Node.js `os` module** -- System monitoring (CPU, memory)
  *
- * 不包含任何模拟、虚拟或推算数据
+ * Contains zero mock, virtual, or extrapolated data.
  */
 
 const http = require('http');

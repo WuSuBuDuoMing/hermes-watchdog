@@ -1,8 +1,12 @@
 /**
- * Hermes 状态监控工具 - Express 服务端
+ * @module server
+ * @description Hermes Watchdog -- Express server entry point.
  *
- * 所有数据来自 cc Switch 真实 API
- * 提供 REST API 和 SSE 实时推送
+ * Sets up middleware, mounts API routes, configures the SSE streaming
+ * endpoint, and starts the real-time data broadcast service.
+ *
+ * @requires express
+ * @requires cors
  */
 
 const express = require('express');
@@ -83,7 +87,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('  ╔══════════════════════════════════════════╗');
   console.log('  ║                                          ║');
-  console.log('  ║     Hermes Monitor v1.0.0                ║');
+  console.log('  ║     Hermes Watchdog v1.9.0                ║');
   console.log('  ║     真实数据监控面板                      ║');
   console.log('  ║                                          ║');
   console.log(`  ║     运行端口: ${PORT}                      ║`);
