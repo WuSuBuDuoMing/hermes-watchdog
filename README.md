@@ -61,6 +61,70 @@ npm start
 
 The dashboard will be available at **http://localhost:3001**.
 
+### Platform-Specific Installation
+
+#### macOS
+
+```bash
+# Install Node.js via Homebrew
+brew install node
+
+# Clone and start
+git clone https://github.com/WuSuBuDuoMing/hermes-watchdog.git
+cd hermes-watchdog
+npm install
+npm start
+```
+
+#### Linux (Ubuntu/Debian)
+
+```bash
+# Install Node.js via package manager
+sudo apt update
+sudo apt install nodejs npm
+
+# Clone and start
+git clone https://github.com/WuSuBuDuoMing/hermes-watchdog.git
+cd hermes-watchdog
+npm install
+npm start
+```
+
+#### Windows
+
+1. Download and install [Node.js](https://nodejs.org/) (>= 18.0) from the official website.
+2. Open **PowerShell** or **Command Prompt**:
+
+```powershell
+git clone https://github.com/WuSuBuDuoMing/hermes-watchdog.git
+cd hermes-watchdog
+npm install
+npm start
+```
+
+#### Docker
+
+```bash
+# Build the image
+docker build -t hermes-watchdog .
+
+# Run the container
+docker run -d -p 3001:3001 --name hermes-watchdog hermes-watchdog
+```
+
+#### Docker Compose
+
+```bash
+# Start in background
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop
+docker-compose down
+```
+
 ### Custom Port
 
 ```bash
