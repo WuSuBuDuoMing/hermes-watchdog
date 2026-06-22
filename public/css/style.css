@@ -1612,6 +1612,267 @@ body::after {
 }
 
 /* ============================
+   Health grid with gauge layout
+   ============================ */
+.health-grid--with-gauge {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--space-xl);
+  align-items: center;
+}
+
+.health-gauge-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.health-gauge-wrap canvas {
+  width: 200px;
+  height: 140px;
+}
+
+.health-bars-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ============================
+   Token Report Section
+   ============================ */
+.reports-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: var(--space-lg);
+}
+
+.report-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.report-tab {
+  type: button;
+  padding: 4px 14px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.report-tab:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.report-tab--active {
+  background: rgba(0, 212, 170, 0.15);
+  color: var(--color-primary);
+}
+
+.report-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.report-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.report-kpi__label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.report-kpi__value {
+  font-size: 16px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chart-container--report {
+  height: 200px;
+}
+
+/* ============================
+   Alert Rules Section
+   ============================ */
+.alert-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.alert-rules-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.alert-rules-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.alert-rules-list::-webkit-scrollbar-thumb {
+  background: var(--text-dim);
+  border-radius: 4px;
+}
+
+.alert-rule-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(12, 18, 32, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.alert-rule-item:hover {
+  border-color: rgba(0, 212, 170, 0.1);
+  background: rgba(16, 24, 42, 0.6);
+}
+
+.alert-rule-item--disabled {
+  opacity: 0.5;
+}
+
+.alert-rule__status {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.alert-rule__status--enabled {
+  background: var(--color-primary);
+}
+
+.alert-rule__status--disabled {
+  background: var(--text-dim);
+}
+
+.alert-rule__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-rule__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.alert-rule__type {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.alert-rule__level {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.alert-rule__level--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-yellow);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.alert-rule__level--critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-red);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.alert-rule__threshold {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ============================
+   SSE Reconnection Status
+   ============================ */
+.sse-status.reconnecting {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.sse-status.reconnecting .sse-dot {
+  background: var(--color-yellow);
+  animation: pulse-glow-yellow 1.5s ease-in-out infinite;
+}
+
+.sse-status.reconnecting .sse-label {
+  color: var(--color-yellow);
+}
+
+@keyframes pulse-glow-yellow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(245, 158, 11, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.6);
+  }
+}
+
+/* ============================
+   Responsive for new sections
+   ============================ */
+@media (max-width: 1200px) {
+  .reports-row {
+    grid-template-columns: 1fr;
+  }
+
+  .health-grid--with-gauge {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .report-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .report-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .report-tabs {
+    font-size: 11px;
+  }
+}
+
+/* ============================
    全宽卡片
    ============================ */
 .card--full {

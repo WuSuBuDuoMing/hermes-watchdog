@@ -16,6 +16,8 @@ const os = require('os');
 const { parseUsageStats } = require('./ccSwitchLogParser');
 const { databaseExists, getDatabaseStats } = require('./ccSwitchDbReader');
 const { checkAlerts } = require('./alertService');
+const { evaluateRules } = require('./alertConfig');
+const { recordSnapshot } = require('./tokenReportService');
 
 /** cc Switch 代理服务地址 */
 const CC_SWITCH_HOST = '127.0.0.1';
@@ -316,20 +318,26 @@ async function getStatusSummary() {
 function startDataSimulation(app) {
   const broadcast = app.locals.broadcastSSE;
 
-  // 每 3 秒推送一次真实状态
+  // Push real status every 3 seconds
   setInterval(async () => {
     const status = await getStatus();
     if (status.running) {
-      // 记录历史
+      // Record history
       recordRequest(status);
 
-      // 获取完整状态摘要
+      // Get full status summary
       const summary = await getStatusSummary();
 
-      // 检查告警
-      const alerts = checkAlerts(summary);
+      // Record token snapshot for report generation
+      recordSnapshot(summary.tokenStats);
+
+      // Check alerts: legacy thresholds + configurable rules
+      const legacyAlerts = checkAlerts(summary);
+      const dynamicAlerts = evaluateRules(summary);
+      const alerts = [...legacyAlerts, ...dynamicAlerts];
+
       if (alerts.length > 0) {
-        console.log('[Alert]', alerts);
+        console.log('[Alert]', alerts.map(a => a.message).join(', '));
       }
 
       broadcast('status_update', {
@@ -340,9 +348,9 @@ function startDataSimulation(app) {
     }
   }, 3000);
 
-  console.log('[RealData] 真实数据服务已启动，每 3 秒从 cc Switch 拉取状态');
-  console.log(`[RealData] cc Switch 地址: http://${CC_SWITCH_HOST}:${CC_SWITCH_PORT}`);
-  console.log(`[RealData] 数据库状态: ${databaseExists() ? '可用' : '不可用'}`);
+  console.log('[RealData] Real data service started (3s interval)');
+  console.log(`[RealData] cc Switch: http://${CC_SWITCH_HOST}:${CC_SWITCH_PORT}`);
+  console.log(`[RealData] Database: ${databaseExists() ? 'available' : 'unavailable'}`);
 }
 
 // ============================

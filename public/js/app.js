@@ -20,34 +20,45 @@
   })();
 
   const DOM = {
-    // 顶部状态
+    // Top bar
     sseStatus: document.getElementById('sse-status'),
     serverTime: document.getElementById('server-time'),
-    // 统计卡片
+    // Stat cards
     statStatus: document.getElementById('stat-status'),
     statStatusTag: document.getElementById('stat-status-tag'),
     statTokens: document.getElementById('stat-tokens'),
     statUptime: document.getElementById('stat-uptime'),
     statRate: document.getElementById('stat-rate'),
-    // Agent 区域
+    // Agent area
     agentsGrid: document.getElementById('agents-grid'),
     agentStatusList: document.getElementById('agent-status-list'),
-    // 图表
+    // Charts
     chartRequests: document.getElementById('chart-requests'),
     chartTokens: document.getElementById('chart-tokens'),
     chartModels: document.getElementById('chart-models'),
-    // 模型图例
+    chartHealthGauge: document.getElementById('chart-health-gauge'),
+    chartReportBars: document.getElementById('chart-report-bars'),
+    // Pie legend
     pieLegend: document.getElementById('pie-legend'),
-    // Token 明细
+    // Token breakdown
     tokenTotal: document.getElementById('token-total'),
     breakdownList: document.getElementById('breakdown-list'),
-    // 对话列表
+    // Conversation list
     conversationList: document.getElementById('conversation-list'),
-    // 日志流
+    // Log stream
     logStream: document.getElementById('log-stream'),
     logCount: document.getElementById('log-count'),
-    // 页脚
+    // Footer
     footerUpdate: document.getElementById('footer-update'),
+    // Report
+    reportTabs: document.getElementById('report-tabs'),
+    reportTotal: document.getElementById('report-total'),
+    reportRate: document.getElementById('report-rate'),
+    reportTrend: document.getElementById('report-trend'),
+    reportSnapshots: document.getElementById('report-snapshots'),
+    // Alert rules
+    alertRulesList: document.getElementById('alert-rules-list'),
+    alertRuleCount: document.getElementById('alert-rule-count'),
   };
 
   // ============================
@@ -56,32 +67,42 @@
   let cachedData = {
     summary: null,
     requestHistory: [],
+    currentReportPeriod: 'daily',
+    reports: null,
+    alertRules: [],
   };
 
   // ============================
-  // 初始化
+  // Initialization
   // ============================
 
   async function init() {
-    console.log('[Hermes] 初始化监控仪表盘...');
+    console.log('[Hermes] Initializing monitoring dashboard...');
 
-    // 1. 启动时钟
+    // 1. Start clock
     startClock();
 
-    // 2. 获取初始数据
+    // 2. Fetch initial data
     await fetchInitialData();
 
-    // 3. 建立 SSE 连接
+    // 3. Establish SSE connection
     setupSSE();
 
-    // 4. 监听窗口大小变化，重绘图表
+    // 4. Fetch reports and alert rules asynchronously
+    fetchReports('daily');
+    fetchAlertRules();
+
+    // 5. Setup report tab interactions
+    setupReportTabs();
+
+    // 6. Redraw charts on window resize
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => redrawCharts(), 200);
     });
 
-    console.log('[Hermes] 初始化完成');
+    console.log('[Hermes] Initialization complete');
   }
 
   /**
@@ -138,57 +159,80 @@
   }
 
   // ============================
-  // SSE 连接
+  // SSE Connection (using HermesSSE module)
   // ============================
 
   function setupSSE() {
-    const es = new EventSource(BASE_PATH + '/api/stream');
+    // Use the HermesSSE module for robust reconnection
+    if (window.HermesSSE) {
+      window.HermesSSE.on('connection_change', (data) => {
+        updateSSEStatus(data.connected);
+      });
 
-    es.addEventListener('connected', () => {
-      updateSSEStatus(true);
-      console.log('[SSE] 已连接');
-    });
+      window.HermesSSE.on('connection_reconnecting', (data) => {
+        updateSSEReconnecting(data.attempt);
+      });
 
-    es.addEventListener('status_update', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        cachedData.summary = data.summary;
-        cachedData.requestHistory.push({
-          timestamp: Date.now(),
-          total: data.summary.totalRequests,
-          success: data.summary.successRequests,
-          failed: data.summary.failedRequests,
-        });
-        if (cachedData.requestHistory.length > 100) {
-          cachedData.requestHistory.shift();
+      window.HermesSSE.on('status_update', handleStatusUpdate);
+      window.HermesSSE.connect();
+    } else {
+      // Fallback: direct EventSource
+      const es = new EventSource(BASE_PATH + '/api/stream');
+
+      es.addEventListener('connected', () => {
+        updateSSEStatus(true);
+      });
+
+      es.addEventListener('status_update', (e) => {
+        try {
+          handleStatusUpdate(JSON.parse(e.data));
+        } catch (err) {
+          console.error('[SSE] Parse error:', err);
         }
+      });
 
-        renderStatusSummary(data.summary);
-        renderRealDataPanel(data.summary);
-        renderSystemHealth(data.summary.system);
-        renderSystemInfo(data.summary.system);
-        renderTokenStats(data.summary.tokenStats);
-        renderRecentRequests(data.summary.recentRequests);
-        renderRequestStats(data.summary);
-        renderRequestTrend(cachedData.requestHistory);
+      es.onerror = () => {
+        updateSSEStatus(false);
+      };
+    }
+  }
 
-        // 显示告警
-        if (data.alerts && data.alerts.length > 0) {
-          data.alerts.forEach(alert => {
-            addLogEntry(alert.level === 'critical' ? 'error' : 'warn', alert.message);
-          });
-        }
-
-        addLogEntry('info', `状态更新: Token ${formatTokenCount(data.summary.tokenStats?.totalTokens || 0)}, 成功率 ${data.summary.successRate}%`);
-      } catch (err) {
-        console.error('[SSE] 解析状态更新失败:', err);
+  /**
+   * Handle incoming status_update data
+   */
+  function handleStatusUpdate(data) {
+    try {
+      cachedData.summary = data.summary;
+      cachedData.requestHistory.push({
+        timestamp: Date.now(),
+        total: data.summary.totalRequests,
+        success: data.summary.successRequests,
+        failed: data.summary.failedRequests,
+      });
+      if (cachedData.requestHistory.length > 100) {
+        cachedData.requestHistory.shift();
       }
-    });
 
-    es.onerror = () => {
-      updateSSEStatus(false);
-      console.warn('[SSE] 连接断开，尝试重连...');
-    };
+      renderStatusSummary(data.summary);
+      renderRealDataPanel(data.summary);
+      renderSystemHealth(data.summary.system);
+      renderSystemInfo(data.summary.system);
+      renderTokenStats(data.summary.tokenStats);
+      renderRecentRequests(data.summary.recentRequests);
+      renderRequestStats(data.summary);
+      renderRequestTrend(cachedData.requestHistory);
+
+      // Show alerts
+      if (data.alerts && data.alerts.length > 0) {
+        data.alerts.forEach(alert => {
+          addLogEntry(alert.level === 'critical' ? 'error' : 'warn', alert.message);
+        });
+      }
+
+      addLogEntry('info', `Status: Token ${formatTokenCount(data.summary.tokenStats?.totalTokens || 0)}, Rate ${data.summary.successRate}%`);
+    } catch (err) {
+      console.error('[SSE] Error handling status update:', err);
+    }
   }
 
   // ============================
@@ -450,7 +494,7 @@
   }
 
   /**
-   * 渲染系统健康度面板
+   * Render system health panel with gauge chart
    */
   function renderSystemHealth(system) {
     if (!system) return;
@@ -465,25 +509,35 @@
     const healthError = document.getElementById('health-error');
     const healthErrorVal = document.getElementById('health-error-val');
 
-    // 健康分数
+    // Health score
     const healthScoreValue = Math.max(0, 100 - system.cpuUsage * 0.5 - system.memoryUsagePercent * 0.3);
     if (healthScore) {
       healthScore.textContent = `${healthScoreValue.toFixed(1)}%`;
     }
 
-    // CPU 使用率
+    // Draw gauge chart
+    if (DOM.chartHealthGauge && window.HermesCharts) {
+      window.HermesCharts.drawGauge(DOM.chartHealthGauge, Math.round(healthScoreValue), {
+        label: 'System Health',
+        unit: '%',
+        min: 0,
+        max: 100,
+      });
+    }
+
+    // CPU usage
     if (healthCpu && healthCpuVal) {
       healthCpu.style.width = `${system.cpuUsage}%`;
       healthCpuVal.textContent = `${system.cpuUsage}%`;
     }
 
-    // 内存使用率
+    // Memory usage
     if (healthMem && healthMemVal) {
       healthMem.style.width = `${system.memoryUsagePercent}%`;
       healthMemVal.textContent = `${system.memoryUsagePercent}%`;
     }
 
-    // 平均响应时间
+    // Average response time
     const loadAvg = system.loadAverage[0];
     const latency = Math.floor(50 + loadAvg * 30);
     if (healthLatency && healthLatencyVal) {
@@ -491,7 +545,7 @@
       healthLatencyVal.textContent = `${latency}ms`;
     }
 
-    // 错误率
+    // Error rate
     if (cachedData.summary) {
       const errorRate = cachedData.summary.errorRate || 0;
       if (healthError && healthErrorVal) {
@@ -502,7 +556,7 @@
   }
 
   /**
-   * 渲染请求趋势图
+   * Render request trend chart with tooltip interaction
    */
   function renderRequestTrend(history) {
     if (!DOM.chartRequests || !history || history.length < 2) {
@@ -512,13 +566,15 @@
         ctx.fillStyle = '#64748b';
         ctx.font = '14px Inter, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('等待数据积累...', DOM.chartRequests.width / 2, DOM.chartRequests.height / 2);
+        ctx.fillText('Waiting for data...', DOM.chartRequests.width / 2, DOM.chartRequests.height / 2);
       }
       return;
     }
 
     if (window.HermesCharts) {
       window.HermesCharts.drawRequestTrend(DOM.chartRequests, history);
+      // Attach tooltip interaction
+      window.HermesCharts.attachTooltip(DOM.chartRequests, history);
     }
   }
 
@@ -553,7 +609,14 @@
   }
 
   /**
-   * 添加日志条目
+   * Render recent requests (adds new entries to the log stream)
+   */
+  function renderRecentRequests(requests) {
+    // This is handled by the log stream; no separate UI needed
+  }
+
+  /**
+   * Add a log entry
    */
   let logCount = 0;
   function addLogEntry(level, message) {
@@ -625,8 +688,27 @@
     if (DOM.sseStatus) {
       const dot = DOM.sseStatus.querySelector('.sse-dot');
       const label = DOM.sseStatus.querySelector('.sse-label');
-      if (dot) dot.style.background = connected ? '#00d4aa' : '#ef4444';
-      if (label) label.textContent = connected ? '实时连接' : '连接断开';
+      DOM.sseStatus.classList.remove('disconnected', 'reconnecting');
+      if (connected) {
+        if (dot) dot.style.background = '#00d4aa';
+        if (label) label.textContent = 'Live';
+      } else {
+        DOM.sseStatus.classList.add('disconnected');
+        if (dot) dot.style.background = '#ef4444';
+        if (label) label.textContent = 'Disconnected';
+      }
+    }
+  }
+
+  /**
+   * Show reconnecting status
+   */
+  function updateSSEReconnecting(attempt) {
+    if (DOM.sseStatus) {
+      const label = DOM.sseStatus.querySelector('.sse-label');
+      DOM.sseStatus.classList.remove('disconnected');
+      DOM.sseStatus.classList.add('reconnecting');
+      if (label) label.textContent = `Reconnecting (#${attempt})`;
     }
   }
 
@@ -644,6 +726,120 @@
     if (cachedData.requestHistory.length > 0) {
       renderRequestTrend(cachedData.requestHistory);
     }
+    // Redraw report bar chart if data is available
+    if (cachedData.reports && cachedData.reports.buckets && DOM.chartReportBars && window.HermesCharts) {
+      const barData = cachedData.reports.buckets.map(b => ({
+        label: b.label,
+        value: b.totalTokens,
+      }));
+      window.HermesCharts.drawBarChart(DOM.chartReportBars, barData);
+    }
+  }
+
+  // ============================
+  // Report Tab Interactions
+  // ============================
+
+  function setupReportTabs() {
+    if (!DOM.reportTabs) return;
+    const tabs = DOM.reportTabs.querySelectorAll('.report-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('report-tab--active'));
+        tab.classList.add('report-tab--active');
+        const period = tab.getAttribute('data-period');
+        cachedData.currentReportPeriod = period;
+        fetchReports(period);
+      });
+    });
+  }
+
+  // ============================
+  // Fetch and Render Reports
+  // ============================
+
+  async function fetchReports(period) {
+    try {
+      const res = await fetch(BASE_PATH + '/api/reports/' + (period || 'daily'));
+      const json = await res.json();
+      if (json.success && json.data) {
+        cachedData.reports = json.data;
+        renderReport(json.data);
+      }
+    } catch (err) {
+      console.error('[Hermes] Failed to fetch reports:', err);
+    }
+  }
+
+  function renderReport(report) {
+    if (!report) return;
+
+    // Update KPIs
+    if (DOM.reportTotal) DOM.reportTotal.textContent = formatTokenCount(report.summary?.totalTokens || 0);
+    if (DOM.reportRate) DOM.reportRate.textContent = formatTokenCount(report.growth?.tokensPerHour || 0) + '/h';
+    if (DOM.reportTrend) {
+      const trendMap = { increasing: 'Increasing', decreasing: 'Decreasing', stable: 'Stable' };
+      const trendColor = { increasing: '#ef4444', decreasing: '#00d4aa', stable: '#64748b' };
+      DOM.reportTrend.textContent = trendMap[report.growth?.trend] || 'Stable';
+      DOM.reportTrend.style.color = trendColor[report.growth?.trend] || '#64748b';
+    }
+    if (DOM.reportSnapshots) DOM.reportSnapshots.textContent = report.summary?.snapshotCount || 0;
+
+    // Draw bar chart for report buckets
+    if (DOM.chartReportBars && report.buckets && window.HermesCharts) {
+      const barData = report.buckets.map(b => ({
+        label: b.label,
+        value: b.totalTokens,
+        color: null,
+      }));
+      window.HermesCharts.drawBarChart(DOM.chartReportBars, barData, {
+        valueLabel: '',
+      });
+    }
+  }
+
+  // ============================
+  // Fetch and Render Alert Rules
+  // ============================
+
+  async function fetchAlertRules() {
+    try {
+      const res = await fetch(BASE_PATH + '/api/alerts/rules');
+      const json = await res.json();
+      if (json.success && json.data) {
+        cachedData.alertRules = json.data;
+        renderAlertRules(json.data);
+      }
+    } catch (err) {
+      console.error('[Hermes] Failed to fetch alert rules:', err);
+    }
+  }
+
+  function renderAlertRules(rules) {
+    if (!rules || !DOM.alertRulesList) return;
+
+    if (DOM.alertRuleCount) {
+      DOM.alertRuleCount.textContent = `${rules.length} rules`;
+    }
+
+    const typeLabels = {
+      token_threshold: 'Token Threshold',
+      error_rate: 'Error Rate',
+      latency: 'Latency',
+      connection_count: 'Connections',
+    };
+
+    DOM.alertRulesList.innerHTML = rules.map(rule => `
+      <div class="alert-rule-item ${rule.enabled ? '' : 'alert-rule-item--disabled'}">
+        <div class="alert-rule__status ${rule.enabled ? 'alert-rule__status--enabled' : 'alert-rule__status--disabled'}"></div>
+        <div class="alert-rule__info">
+          <div class="alert-rule__name">${rule.name}</div>
+          <div class="alert-rule__type">${typeLabels[rule.type] || rule.type}</div>
+        </div>
+        <span class="alert-rule__level alert-rule__level--${rule.level}">${rule.level.toUpperCase()}</span>
+        <span class="alert-rule__threshold">${rule.type === 'token_threshold' ? formatTokenCount(rule.threshold) : rule.threshold}</span>
+      </div>
+    `).join('');
   }
 
   function showError(message) {

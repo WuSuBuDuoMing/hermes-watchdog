@@ -5,6 +5,11 @@
  * Sets up middleware, mounts API routes, configures the SSE streaming
  * endpoint, and starts the real-time data broadcast service.
  *
+ * v1.12.0 improvements:
+ * - SSE heartbeat with jitter to prevent thundering herd
+ * - Client connection ID tracking for diagnostics
+ * - Integration with configurable alert rules and token report snapshots
+ *
  * @requires express
  * @requires cors
  */
@@ -19,35 +24,51 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // ============================
-// 中间件配置
+// Middleware configuration
 // ============================
 app.use(cors());
 app.use(express.json());
 
-// 静态文件服务 —— public 目录
+// Static file serving -- public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================
-// API 路由挂载
+// API route mounting
 // ============================
 app.use('/api', apiRoutes);
 
 // ============================
-// SSE 客户端管理
+// SSE client management
 // ============================
-const sseClients = new Set();
+let sseClientIdCounter = 0;
+const sseClients = new Map(); // Map<res, { id, connectedAt }>
 
-// 暴露 SSE 广播函数给数据服务
+/**
+ * Broadcast SSE event to all connected clients.
+ * @param {string} eventType
+ * @param {Object} data
+ */
 app.locals.broadcastSSE = (eventType, data) => {
   const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    client.write(payload);
+  for (const [client, meta] of sseClients) {
+    try {
+      client.write(payload);
+    } catch (err) {
+      // Client write failed, remove it
+      console.warn(`[SSE] Failed to write to client #${meta.id}, removing`);
+      sseClients.delete(client);
+    }
   }
 };
 
-// SSE 端点
+/**
+ * Get current SSE connection count (used by diagnostics).
+ */
+app.locals.getSSEClientCount = () => sseClients.size;
+
+// SSE endpoint with jittered heartbeat and connection tracking
 app.get('/api/stream', (req, res) => {
-  // 设置 SSE 响应头
+  // SSE response headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -55,45 +76,60 @@ app.get('/api/stream', (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  // 发送连接成功事件
-  res.write(`event: connected\ndata: ${JSON.stringify({ message: 'Hermes Monitor SSE connected' })}\n\n`);
+  // Assign unique connection ID
+  const clientId = ++sseClientIdCounter;
+  const connectedAt = new Date().toISOString();
 
-  // 添加到客户端集合
-  sseClients.add(res);
-  console.log(`[SSE] 新客户端连接，当前在线: ${sseClients.size}`);
+  // Send connection success event (includes client ID for diagnostics)
+  res.write(`event: connected\ndata: ${JSON.stringify({
+    message: 'Hermes Monitor SSE connected',
+    clientId,
+    connectedAt,
+  })}\n\n`);
 
-  // 心跳保持连接（每 15 秒）
+  // Add to client map
+  sseClients.set(res, { id: clientId, connectedAt });
+  console.log(`[SSE] Client #${clientId} connected. Total: ${sseClients.size}`);
+
+  // Heartbeat with jitter to prevent thundering herd
+  const baseInterval = 15000;
+  const jitter = Math.floor(Math.random() * 3000); // 0-3s jitter
   const heartbeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
-  }, 15000);
+    try {
+      res.write(`: heartbeat #${clientId}\n\n`);
+    } catch (err) {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    }
+  }, baseInterval + jitter);
 
-  // 客户端断开时清理
+  // Client disconnect cleanup
   req.on('close', () => {
     sseClients.delete(res);
     clearInterval(heartbeat);
-    console.log(`[SSE] 客户端断开，当前在线: ${sseClients.size}`);
+    console.log(`[SSE] Client #${clientId} disconnected. Total: ${sseClients.size}`);
   });
 });
 
 // ============================
-// 启动真实数据推送服务
+// Start real data push service
 // ============================
 startDataSimulation(app);
 
 // ============================
-// 启动服务
+// Start server
 // ============================
 app.listen(PORT, () => {
   console.log('');
   console.log('  ╔══════════════════════════════════════════╗');
   console.log('  ║                                          ║');
-  console.log('  ║     Hermes Watchdog v1.9.0                ║');
-  console.log('  ║     真实数据监控面板                      ║');
+  console.log('  ║     Hermes Watchdog v1.12.0              ║');
+  console.log('  ║     Real-time Monitoring Dashboard       ║');
   console.log('  ║                                          ║');
-  console.log(`  ║     运行端口: ${PORT}                      ║`);
-  console.log(`  ║     访问地址: http://localhost:${PORT}       ║`);
+  console.log(`  ║     Port: ${String(PORT).padEnd(32)}║`);
+  console.log(`  ║     URL:  http://localhost:${String(PORT).padEnd(14)}║`);
   console.log('  ║                                          ║');
-  console.log('  ║     数据来源: cc Switch (127.0.0.1:15721) ║');
+  console.log('  ║     Data: cc Switch (127.0.0.1:15721)    ║');
   console.log('  ║                                          ║');
   console.log('  ╚══════════════════════════════════════════╝');
   console.log('');

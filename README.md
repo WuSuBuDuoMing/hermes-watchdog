@@ -13,13 +13,16 @@ A real-time monitoring dashboard for **cc Switch** AI proxy services. Provides R
 ## Features
 
 - **Real-Time Dashboard** -- Dark-themed SPA with pulse animations, scroll transitions, and smooth chart rendering
-- **SSE Live Updates** -- Server pushes status snapshots every 3 seconds via Server-Sent Events
-- **REST API** -- 7 endpoints for health checks, status, summaries, trends, conversations, and data export
+- **SSE Live Updates** -- Server pushes status snapshots every 3 seconds via Server-Sent Events with exponential backoff reconnection
+- **REST API** -- 7+ endpoints for health checks, status, summaries, trends, conversations, data export, alert rules, and token reports
 - **Token Analytics** -- Tracks input/output/cache tokens from SQLite database or log file parsing
+- **Token Reports** -- Daily, weekly, and monthly token consumption reports with trend analysis and growth rate detection
+- **Configurable Alert Rules** -- Full CRUD API for managing alert rules at runtime with per-rule cooldown and severity levels
 - **System Monitoring** -- Live CPU usage, memory consumption, hostname, uptime, and load average
 - **Provider Tracking** -- Monitors current AI provider, active connections, session count, and failover events
-- **Canvas Charts** -- Bessel-curve line charts, gradient area charts, donut pie charts, and progress bars -- all drawn with zero chart libraries
-- **Alert Engine** -- Configurable thresholds for token usage and error rate with cooldown periods
+- **Canvas Charts** -- Bessel-curve line charts, gradient area charts, donut pie charts, bar charts, gauge charts, sparklines, and progress bars -- all drawn with zero chart libraries
+- **Chart Tooltips** -- Interactive hover tooltips on charts showing exact data values
+- **Alert Engine** -- Configurable thresholds for token usage, error rate, latency, and connection count with cooldown periods
 - **Data Export** -- Export usage statistics to timestamped JSON files
 - **Zero Frontend Dependencies** -- Pure HTML + CSS + JavaScript, no build step required
 

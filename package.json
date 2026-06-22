@@ -1,6 +1,6 @@
 {
   "name": "hermes-monitor",
-  "version": "1.1.0",
+  "version": "1.12.0",
   "description": "Hermes 状态监控工具 - Agent 实时状态仪表盘",
   "main": "server.js",
   "scripts": {

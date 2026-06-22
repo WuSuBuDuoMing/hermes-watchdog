@@ -1,5 +1,72 @@
 # Changelog
 
+## v1.12.0 (2026-06-22)
+
+### Added
+- **Configurable Alert Rules**: Full CRUD API (`/api/alerts/rules`) for managing alert rules at runtime
+  - Supports 4 rule types: `token_threshold`, `error_rate`, `latency`, `connection_count`
+  - Per-rule enable/disable, cooldown period, and severity level (warning/critical)
+  - Persistent JSON config file (`config/alert-rules.json`)
+  - Reset to factory defaults endpoint (`POST /api/alerts/rules/reset`)
+- **Token Usage Reports**: Daily, weekly, and monthly token consumption reports
+  - New service `services/tokenReportService.js` with ring-buffer snapshot storage
+  - API endpoints: `GET /api/reports`, `GET /api/reports/:period`, `GET /api/reports/snapshot/stats`
+  - Hourly/daily bucket aggregation with growth rate and trend detection
+  - Dashboard section with report period tabs (Day/Week/Month) and KPI cards
+- **Canvas Chart Enhancements**:
+  - Horizontal bar chart (`drawBarChart`) for report bucket visualization
+  - Semi-circular gauge chart (`drawGauge`) for system health score
+  - Inline sparkline chart (`drawSparkline`) for mini trend display
+  - Interactive tooltip system: hover over charts to see exact data values
+  - Chart interaction API: `attachTooltip`, `showTooltip`, `hideTooltip`
+- **Dashboard UI Additions**:
+  - Health gauge visualization alongside existing health bar metrics
+  - Token Usage Report section with period selector and KPI dashboard
+  - Alert Rules list showing all configured rules with status, type, and threshold
+  - SSE reconnection status indicator with yellow pulsing animation
+
+### Changed
+- **SSE Reconnection**: Replaced fixed-interval retry with exponential backoff (1s -> 2s -> 4s -> ... -> 30s max, unlimited retries)
+- **SSE Heartbeat**: Added client-side heartbeat watchdog (45s timeout) that forces reconnect if no message received
+- **SSE Heartbeat Jitter**: Server-side heartbeat interval now includes 0-3s random jitter to prevent thundering herd across multiple clients
+- **SSE Client Tracking**: Each SSE connection now receives a unique `clientId` and `connectedAt` timestamp in the `connected` event
+- **SSE Write Safety**: `broadcastSSE` now uses try/catch per client and auto-removes failed writes from the client pool
+- **Alert Engine**: `startDataSimulation` now evaluates both legacy thresholds AND configurable rules, merging alerts from both systems
+- **Snapshot Recording**: Each SSE push cycle now records a token usage snapshot for report generation
+
+### Fixed
+- Added missing `renderRecentRequests` function stub in app.js
+- Added `updateSSEReconnecting` function for SSE reconnection UI feedback
+
+## v1.11.0 (2026-06-20)
+
+### Changed
+- Enhanced Canvas chart rendering with improved Bessel-curve smoothing
+- Added gradient fill areas with multiple opacity layers for depth
+- Improved chart axis label formatting and auto-scaling
+- Added chart legend items for Token Consumption and Request Trend views
+
+### Added
+- Token Consumption dual-dataset area chart (input vs output tokens)
+- Token Distribution stacked horizontal bar chart
+- Agent progress ring chart with glow effects
+- Request statistics donut pie chart with radial gradient fills
+
+## v1.10.0 (2026-06-18)
+
+### Changed
+- Migrated SSE client management from `Set` to `Map` for connection metadata tracking
+- Improved SSE connection stability with proper error handling in broadcast loop
+- Enhanced error logging with contextual information
+
+### Added
+- Connection diagnostics: track active SSE client count via `app.locals.getSSEClientCount()`
+- Graceful SSE write failure handling with automatic client removal
+
+### Fixed
+- Prevented SSE heartbeat timer leak on client write errors
+- Ensured all SSE clients are properly cleaned up on disconnect
+
 ## v1.6.0 (2026-06-16)
 
 ### Changed

@@ -20,93 +20,149 @@ const HermesSSE = (() => {
 
   const CONFIG = {
     url: _basePath + '/api/stream',
-    reconnectInterval: 3000,  // 重连间隔（毫秒）
-    maxReconnectAttempts: 10, // 最大重连次数
+    reconnectBaseInterval: 1000,   // Base reconnect interval (ms)
+    reconnectMaxInterval: 30000,   // Maximum reconnect interval (ms)
+    reconnectMultiplier: 2,        // Exponential backoff multiplier
+    maxReconnectAttempts: Infinity, // Unlimited retries
+    heartbeatTimeout: 45000,       // Close and reconnect if no message for 45s
   };
 
   // ============================
-  // 状态
+  // State
   // ============================
-  let eventSource = null;         // EventSource 实例
-  let reconnectAttempts = 0;      // 当前重连次数
-  let isConnected = false;        // 连接状态
-  let handlers = {};              // 事件处理器映射
+  let eventSource = null;         // EventSource instance
+  let reconnectAttempts = 0;      // Current reconnect attempt count
+  let isConnected = false;        // Connection state
+  let handlers = {};              // Event handler map
+  let heartbeatTimer = null;      // Heartbeat watchdog timer
+  let reconnectTimer = null;      // Pending reconnect timer
+  let lastMessageTime = 0;        // Timestamp of last message received
 
   // ============================
-  // 公开方法
+  // Public methods
   // ============================
 
   /**
-   * 建立 SSE 连接
-   * @returns {EventSource} EventSource 实例
+   * Establish SSE connection with exponential backoff reconnection.
+   * @returns {EventSource} EventSource instance
    */
   function connect() {
-    // 清理旧连接
+    // Clear any pending reconnect timer
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+
+    // Close existing connection
     if (eventSource) {
       eventSource.close();
     }
 
-    console.log('[SSE] 正在连接...');
+    console.log('[SSE] Connecting...');
 
     eventSource = new EventSource(CONFIG.url);
+    lastMessageTime = Date.now();
 
-    // 连接成功
+    // Start heartbeat watchdog
+    resetHeartbeat();
+
+    // Connection established
     eventSource.addEventListener('connected', (e) => {
-      console.log('[SSE] 连接成功:', JSON.parse(e.data));
+      console.log('[SSE] Connected:', JSON.parse(e.data));
       isConnected = true;
       reconnectAttempts = 0;
+      lastMessageTime = Date.now();
       emit('connection_change', { connected: true });
     });
 
-    // 状态更新事件
+    // Status update event
     eventSource.addEventListener('status_update', (e) => {
+      lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
       emit('status_update', data);
     });
 
-    // Token 更新事件
+    // Token update event
     eventSource.addEventListener('token_update', (e) => {
+      lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
       emit('token_update', data);
     });
 
-    // 新对话事件
+    // New conversation event
     eventSource.addEventListener('new_conversation', (e) => {
+      lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
       emit('new_conversation', data);
     });
 
-    // 连接错误 —— 自动重连
+    // Connection error -- auto-reconnect with exponential backoff
     eventSource.onerror = () => {
-      console.warn('[SSE] 连接断开');
+      console.warn('[SSE] Connection lost');
       isConnected = false;
       emit('connection_change', { connected: false });
 
       eventSource.close();
+      clearHeartbeat();
 
-      if (reconnectAttempts < CONFIG.maxReconnectAttempts) {
-        reconnectAttempts++;
-        const delay = CONFIG.reconnectInterval * Math.min(reconnectAttempts, 3);
-        console.log(`[SSE] ${delay / 1000}s 后重连 (第 ${reconnectAttempts} 次)`);
-        setTimeout(connect, delay);
-      } else {
-        console.error('[SSE] 达到最大重连次数，停止重连');
-        emit('connection_max_retries', {});
-      }
+      // Exponential backoff: 1s, 2s, 4s, 8s, ... up to 30s max
+      reconnectAttempts++;
+      const delay = Math.min(
+        CONFIG.reconnectBaseInterval * Math.pow(CONFIG.reconnectMultiplier, reconnectAttempts - 1),
+        CONFIG.reconnectMaxInterval
+      );
+
+      console.log(`[SSE] Reconnecting in ${(delay / 1000).toFixed(1)}s (attempt ${reconnectAttempts})`);
+      emit('connection_reconnecting', { attempt: reconnectAttempts, delay });
+
+      reconnectTimer = setTimeout(connect, delay);
     };
 
     return eventSource;
   }
 
   /**
-   * 关闭 SSE 连接
+   * Close SSE connection
    */
   function disconnect() {
+    clearHeartbeat();
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     if (eventSource) {
       eventSource.close();
       eventSource = null;
       isConnected = false;
-      console.log('[SSE] 已断开连接');
+      console.log('[SSE] Disconnected');
+    }
+  }
+
+  // ============================
+  // Heartbeat watchdog
+  // ============================
+
+  /**
+   * Reset the heartbeat watchdog timer.
+   * If no message is received within heartbeatTimeout, force reconnect.
+   */
+  function resetHeartbeat() {
+    clearHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      const silence = Date.now() - lastMessageTime;
+      if (silence > CONFIG.heartbeatTimeout) {
+        console.warn(`[SSE] No message for ${(silence / 1000).toFixed(0)}s, forcing reconnect`);
+        if (eventSource) {
+          eventSource.close();
+        }
+      }
+    }, 15000); // Check every 15 seconds
+  }
+
+  function clearHeartbeat() {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
     }
   }
 

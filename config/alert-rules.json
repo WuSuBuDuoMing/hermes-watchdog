@@ -1,0 +1,79 @@
+[
+  {
+    "id": "token-warning",
+    "name": "Token 使用量警告",
+    "type": "token_threshold",
+    "enabled": true,
+    "level": "warning",
+    "threshold": 100000000,
+    "cooldownMs": 300000,
+    "message": "Token 使用量较高: {{value}} 亿",
+    "createdAt": "2026-06-22T01:37:08.492Z"
+  },
+  {
+    "id": "token-critical",
+    "name": "Token 使用量严重警告",
+    "type": "token_threshold",
+    "enabled": true,
+    "level": "critical",
+    "threshold": 500000000,
+    "cooldownMs": 300000,
+    "message": "Token 使用量严重超标: {{value}} 亿",
+    "createdAt": "2026-06-22T01:37:08.495Z"
+  },
+  {
+    "id": "error-rate-warning",
+    "name": "错误率警告",
+    "type": "error_rate",
+    "enabled": true,
+    "level": "warning",
+    "threshold": 5,
+    "cooldownMs": 300000,
+    "message": "错误率较高: {{value}}%",
+    "createdAt": "2026-06-22T01:37:08.495Z"
+  },
+  {
+    "id": "error-rate-critical",
+    "name": "错误率严重警告",
+    "type": "error_rate",
+    "enabled": true,
+    "level": "critical",
+    "threshold": 10,
+    "cooldownMs": 300000,
+    "message": "错误率严重超标: {{value}}%",
+    "createdAt": "2026-06-22T01:37:08.495Z"
+  },
+  {
+    "id": "high-latency",
+    "name": "响应延迟过高",
+    "type": "latency",
+    "enabled": true,
+    "level": "warning",
+    "threshold": 5000,
+    "cooldownMs": 600000,
+    "message": "平均响应延迟过高: {{value}}ms",
+    "createdAt": "2026-06-22T01:37:08.495Z"
+  },
+  {
+    "id": "connection-spike",
+    "name": "连接数异常",
+    "type": "connection_count",
+    "enabled": true,
+    "level": "warning",
+    "threshold": 50,
+    "cooldownMs": 300000,
+    "message": "活跃连接数异常: {{value}} 个",
+    "createdAt": "2026-06-22T01:37:08.495Z"
+  },
+  {
+    "id": "test-rule-1",
+    "name": "Test Rule",
+    "type": "token_threshold",
+    "enabled": true,
+    "level": "warning",
+    "threshold": 50000000,
+    "cooldownMs": 60000,
+    "message": "{{type}} 超过阈值: {{value}}",
+    "createdAt": "2026-06-22T01:37:34.302Z"
+  }
+]

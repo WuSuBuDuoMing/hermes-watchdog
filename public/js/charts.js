@@ -543,6 +543,347 @@ const HermesCharts = (() => {
   }
 
   // ============================
+  // 图表交互：Tooltip 系统
+  // ============================
+
+  /** Active tooltip element (created lazily) */
+  let tooltipEl = null;
+
+  /**
+   * Show a tooltip near a canvas position
+   * @param {HTMLCanvasElement} canvas
+   * @param {number} x - Mouse X relative to canvas
+   * @param {number} y - Mouse Y relative to canvas
+   * @param {string} html - Tooltip inner HTML
+   */
+  function showTooltip(canvas, x, y, html) {
+    if (!tooltipEl) {
+      tooltipEl = document.createElement('div');
+      tooltipEl.className = 'chart-tooltip';
+      tooltipEl.style.cssText = `
+        position: fixed;
+        pointer-events: none;
+        background: rgba(14, 21, 37, 0.95);
+        border: 1px solid rgba(0, 212, 170, 0.3);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: #f1f5f9;
+        font-family: 'JetBrains Mono', monospace;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        z-index: 9999;
+        backdrop-filter: blur(8px);
+        transition: opacity 0.15s ease;
+        opacity: 0;
+        max-width: 240px;
+        line-height: 1.5;
+      `;
+      document.body.appendChild(tooltipEl);
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.left = `${rect.left + x + 12}px`;
+    tooltipEl.style.top = `${rect.top + y - 10}px`;
+    tooltipEl.style.opacity = '1';
+  }
+
+  /**
+   * Hide the tooltip
+   */
+  function hideTooltip() {
+    if (tooltipEl) {
+      tooltipEl.style.opacity = '0';
+    }
+  }
+
+  // ============================
+  // 图表：水平条形图（Bar Chart）
+  // ============================
+
+  /**
+   * Draw a horizontal bar chart
+   * @param {HTMLCanvasElement} canvas
+   * @param {Array<{label: string, value: number, color?: string}>} data
+   * @param {Object} [options]
+   * @param {string} [options.title] - Chart title
+   * @param {string} [options.valueLabel] - Label suffix for values
+   */
+  function drawBarChart(canvas, data, options = {}) {
+    const { ctx, width, height } = setupCanvas(canvas);
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!data || data.length === 0) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('等待数据...', width / 2, height / 2);
+      return;
+    }
+
+    const padding = { top: 10, right: 20, bottom: 10, left: 120 };
+    const chartW = width - padding.left - padding.right;
+    const chartH = height - padding.top - padding.bottom;
+    const barHeight = Math.min(28, (chartH / data.length) * 0.6);
+    const barGap = (chartH - barHeight * data.length) / (data.length + 1);
+
+    const maxVal = Math.max(...data.map(d => d.value)) * 1.1 || 1;
+    const barColors = [COLORS.primary, COLORS.cyan, COLORS.purple, COLORS.yellow, COLORS.blue, COLORS.red];
+
+    data.forEach((item, i) => {
+      const y = padding.top + barGap + i * (barHeight + barGap);
+      const barW = Math.max(4, (item.value / maxVal) * chartW);
+      const color = item.color || barColors[i % barColors.length];
+
+      // Background track
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.beginPath();
+      ctx.roundRect(padding.left, y, chartW, barHeight, 4);
+      ctx.fill();
+
+      // Value bar with gradient
+      const gradient = ctx.createLinearGradient(padding.left, 0, padding.left + barW, 0);
+      gradient.addColorStop(0, color + '80');
+      gradient.addColorStop(1, color);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.roundRect(padding.left, y, barW, barHeight, 4);
+      ctx.fill();
+
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = color;
+      ctx.fillRect(padding.left + barW - 2, y, 2, barHeight);
+      ctx.shadowBlur = 0;
+
+      // Label
+      ctx.fillStyle = COLORS.gridText;
+      ctx.font = '12px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(item.label, padding.left - 12, y + barHeight / 2);
+
+      // Value text
+      ctx.fillStyle = '#f1f5f9';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      const suffix = options.valueLabel || '';
+      ctx.fillText(`${formatNumber(item.value)}${suffix}`, padding.left + barW + 8, y + barHeight / 2);
+    });
+  }
+
+  // ============================
+  // 图表：仪表盘图（Gauge Chart）
+  // ============================
+
+  /**
+   * Draw a semi-circular gauge chart
+   * @param {HTMLCanvasElement} canvas
+   * @param {number} value - Current value (0-100 for percentage)
+   * @param {Object} [options]
+   * @param {string} [options.label] - Label below the value
+   * @param {string} [options.unit] - Unit suffix
+   * @param {number} [options.min] - Min value (default 0)
+   * @param {number} [options.max] - Max value (default 100)
+   */
+  function drawGauge(canvas, value, options = {}) {
+    const { ctx, width, height } = setupCanvas(canvas);
+
+    ctx.clearRect(0, 0, width, height);
+
+    const centerX = width / 2;
+    const centerY = height * 0.65;
+    const radius = Math.min(width / 2, height * 0.6) - 12;
+    const lineWidth = 12;
+
+    const minVal = options.min || 0;
+    const maxVal = options.max || 100;
+    const clamped = Math.max(minVal, Math.min(maxVal, value));
+    const ratio = (clamped - minVal) / (maxVal - minVal);
+
+    // Background arc (full semi-circle)
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = lineWidth;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // Gradient segments
+    const segments = [
+      { start: 0, end: 0.3, color: COLORS.primary },
+      { start: 0.3, end: 0.7, color: COLORS.yellow },
+      { start: 0.7, end: 1, color: COLORS.red },
+    ];
+
+    segments.forEach(seg => {
+      const startAngle = Math.PI + seg.start * Math.PI;
+      const endAngle = Math.PI + Math.min(seg.end, ratio) * Math.PI;
+      if (endAngle <= startAngle) return;
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle, false);
+      ctx.strokeStyle = seg.color;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    });
+
+    // Glow on the active end
+    const activeAngle = Math.PI + ratio * Math.PI;
+    const activeX = centerX + radius * Math.cos(activeAngle);
+    const activeY = centerY + radius * Math.sin(activeAngle);
+
+    const activeColor = ratio < 0.3 ? COLORS.primary : ratio < 0.7 ? COLORS.yellow : COLORS.red;
+    ctx.beginPath();
+    ctx.arc(activeX, activeY, lineWidth / 2 + 2, 0, Math.PI * 2);
+    ctx.fillStyle = activeColor;
+    ctx.shadowColor = activeColor;
+    ctx.shadowBlur = 16;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Center value text
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = 'bold 24px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const unit = options.unit || '%';
+    ctx.fillText(`${value}${unit}`, centerX, centerY - 10);
+
+    // Label
+    ctx.fillStyle = '#64748b';
+    ctx.font = '11px "Inter", sans-serif';
+    ctx.fillText(options.label || '健康度', centerX, centerY + 18);
+
+    // Min / Max labels
+    ctx.fillStyle = '#475569';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${minVal}`, centerX - radius - 4, centerY + 20);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${maxVal}`, centerX + radius + 4, centerY + 20);
+  }
+
+  // ============================
+  // 图表：迷你折线图（Sparkline）
+  // ============================
+
+  /**
+   * Draw a small inline sparkline chart
+   * @param {HTMLCanvasElement} canvas
+   * @param {number[]} data - Array of values
+   * @param {Object} [options]
+   * @param {string} [options.color] - Line color
+   * @param {boolean} [options.fill] - Whether to fill the area
+   */
+  function drawSparkline(canvas, data, options = {}) {
+    const { ctx, width, height } = setupCanvas(canvas);
+
+    ctx.clearRect(0, 0, width, height);
+    if (!data || data.length < 2) return;
+
+    const color = options.color || COLORS.primary;
+    const padding = 4;
+    const chartW = width - padding * 2;
+    const chartH = height - padding * 2;
+    const maxVal = Math.max(...data) * 1.1 || 1;
+    const minVal = Math.min(...data) * 0.9;
+    const range = maxVal - minVal || 1;
+
+    const points = data.map((v, i) => ({
+      x: padding + (i / (data.length - 1)) * chartW,
+      y: padding + chartH - ((v - minVal) / range) * chartH,
+    }));
+
+    // Fill area
+    if (options.fill) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, height);
+      points.forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.lineTo(points[points.length - 1].x, height);
+      ctx.closePath();
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, color + '30');
+      gradient.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gradient;
+      ctx.fill();
+    }
+
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const cpx = (prev.x + curr.x) / 2;
+      ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    // End dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // ============================
+  // 图表交互：绑定 Hover 事件
+  // ============================
+
+  /**
+   * Attach tooltip interaction to a canvas with request trend data.
+   * @param {HTMLCanvasElement} canvas
+   * @param {Array} data - The dataset used to draw the chart
+   * @param {Function} drawFn - The function to redraw the chart (for highlight)
+   */
+  function attachTooltip(canvas, data, drawFn) {
+    canvas.addEventListener('mousemove', (e) => {
+      if (!data || data.length === 0) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const padding = { top: 20, right: 20, bottom: 35, left: 50 };
+      const chartW = rect.width - padding.left - padding.right;
+
+      // Find nearest data index
+      const relX = mouseX - padding.left;
+      const idx = Math.round((relX / chartW) * (data.length - 1));
+
+      if (idx < 0 || idx >= data.length) {
+        hideTooltip();
+        return;
+      }
+
+      const item = data[idx];
+      let html = `<div style="font-weight:600;margin-bottom:4px;color:#00d4aa">${item.hour || item.label || ''}</div>`;
+      if (item.success !== undefined) {
+        html += `<div>成功: ${item.success}</div>`;
+        html += `<div>失败: ${item.failed}</div>`;
+        html += `<div>总计: ${item.requests || (item.success + item.failed)}</div>`;
+      } else if (item.totalTokens !== undefined) {
+        html += `<div>输入: ${formatTokens(item.inputTokens)}</div>`;
+        html += `<div>输出: ${formatTokens(item.outputTokens)}</div>`;
+        html += `<div>总计: ${formatTokens(item.totalTokens)}</div>`;
+      }
+
+      showTooltip(canvas, mouseX, mouseY, html);
+    });
+
+    canvas.addEventListener('mouseleave', hideTooltip);
+  }
+
+  // ============================
   // 公开 API
   // ============================
   return {
@@ -551,6 +892,12 @@ const HermesCharts = (() => {
     drawModelPie,
     drawAgentRing,
     drawTokenDistribution,
+    drawBarChart,
+    drawGauge,
+    drawSparkline,
+    attachTooltip,
+    showTooltip,
+    hideTooltip,
     formatNumber,
     formatTokens,
     COLORS,
