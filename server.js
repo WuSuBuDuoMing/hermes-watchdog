@@ -5,10 +5,11 @@
  * Sets up middleware, mounts API routes, configures the SSE streaming
  * endpoint, and starts the real-time data broadcast service.
  *
- * v1.12.0 improvements:
- * - SSE heartbeat with jitter to prevent thundering herd
- * - Client connection ID tracking for diagnostics
- * - Integration with configurable alert rules and token report snapshots
+ * v1.15.0 improvements:
+ * - Canvas chart animation and auto-resize system
+ * - SSE connection quality metrics and bandwidth monitoring
+ * - Alert rule validation, batch operations, and execution history
+ * - Exponential cooldown backoff for repeated alerts
  *
  * @requires express
  * @requires cors
@@ -123,7 +124,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('  ╔══════════════════════════════════════════╗');
   console.log('  ║                                          ║');
-  console.log('  ║     Hermes Watchdog v1.12.0              ║');
+  console.log('  ║     Hermes Watchdog v1.15.0              ║');
   console.log('  ║     Real-time Monitoring Dashboard       ║');
   console.log('  ║                                          ║');
   console.log(`  ║     Port: ${String(PORT).padEnd(32)}║`);

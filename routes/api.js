@@ -27,6 +27,12 @@ const {
   updateRule,
   deleteRule,
   resetToDefaults,
+  // v1.15.0 additions
+  validateRule,
+  batchSetEnabled,
+  batchDeleteRules,
+  getExecutionHistory,
+  getAllExecutionHistory,
 } = require('../services/alertConfig');
 const {
   generateReport,
@@ -240,6 +246,104 @@ router.post('/alerts/rules/reset', (req, res) => {
     res.json({ success: true, data: rules, total: rules.length });
   } catch (error) {
     res.status(500).json({ success: false, error: '重置告警规则失败' });
+  }
+});
+
+// ============================
+// v1.15.0: Batch Operations
+// ============================
+
+/**
+ * POST /api/alerts/rules/batch/enable
+ * 批量启用告警规则
+ * Body: { ruleIds: string[] }
+ */
+router.post('/alerts/rules/batch/enable', (req, res) => {
+  try {
+    const { ruleIds } = req.body;
+    if (!Array.isArray(ruleIds) || ruleIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'ruleIds 必须是非空数组' });
+    }
+    const result = batchSetEnabled(ruleIds, true);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '批量启用失败' });
+  }
+});
+
+/**
+ * POST /api/alerts/rules/batch/disable
+ * 批量禁用告警规则
+ * Body: { ruleIds: string[] }
+ */
+router.post('/alerts/rules/batch/disable', (req, res) => {
+  try {
+    const { ruleIds } = req.body;
+    if (!Array.isArray(ruleIds) || ruleIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'ruleIds 必须是非空数组' });
+    }
+    const result = batchSetEnabled(ruleIds, false);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '批量禁用失败' });
+  }
+});
+
+/**
+ * POST /api/alerts/rules/batch/delete
+ * 批量删除告警规则
+ * Body: { ruleIds: string[] }
+ */
+router.post('/alerts/rules/batch/delete', (req, res) => {
+  try {
+    const { ruleIds } = req.body;
+    if (!Array.isArray(ruleIds) || ruleIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'ruleIds 必须是非空数组' });
+    }
+    const result = batchDeleteRules(ruleIds);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '批量删除失败' });
+  }
+});
+
+/**
+ * POST /api/alerts/rules/validate
+ * 验证告警规则数据
+ * Body: rule data object
+ */
+router.post('/alerts/rules/validate', (req, res) => {
+  try {
+    const validation = validateRule(req.body);
+    res.json({ success: true, data: validation });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '验证失败' });
+  }
+});
+
+/**
+ * GET /api/alerts/rules/history
+ * 获取所有规则的执行历史
+ */
+router.get('/alerts/rules/history', (req, res) => {
+  try {
+    const history = getAllExecutionHistory();
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '获取执行历史失败' });
+  }
+});
+
+/**
+ * GET /api/alerts/rules/history/:id
+ * 获取指定规则的执行历史
+ */
+router.get('/alerts/rules/history/:id', (req, res) => {
+  try {
+    const history = getExecutionHistory(req.params.id);
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ success: false, error: '获取执行历史失败' });
   }
 });
 

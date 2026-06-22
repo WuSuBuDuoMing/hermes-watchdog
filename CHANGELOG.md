@@ -1,5 +1,76 @@
 # Changelog
 
+## v1.15.0 (2026-06-23)
+
+### Added
+- **Alert Rule Validation**: Comprehensive validation with detailed error messages for all rule fields
+  - New endpoint `POST /api/alerts/rules/validate` to validate rule data before creating
+  - Validates id, type, level, threshold, cooldownMs, name, and message fields
+- **Alert Rule Batch Operations**: Manage multiple rules at once
+  - `POST /api/alerts/rules/batch/enable` -- bulk enable rules by ID
+  - `POST /api/alerts/rules/batch/disable` -- bulk disable rules by ID
+  - `POST /api/alerts/rules/batch/delete` -- bulk delete rules by ID
+- **Alert Rule Execution History**: Track when rules fire and their measured values
+  - `GET /api/alerts/rules/history` -- all rules execution history
+  - `GET /api/alerts/rules/history/:id` -- per-rule execution history
+  - Ring buffer of last 50 events per rule
+- **Exponential Cooldown Backoff**: Repeatedly firing rules get progressively longer cooldowns
+  - Starts at the rule's base cooldownMs
+  - Increases by 1.5x for each consecutive fire, capped at 5x
+  - Resets when the measured value drops below threshold
+
+### Changed
+- Alert config module exports new functions: `validateRule`, `batchSetEnabled`, `batchDeleteRules`, `getExecutionHistory`, `getAllExecutionHistory`, `getEffectiveCooldown`
+- `createRule` now uses structured validation before duplicate-type checks
+- `evaluateRules` now tracks consecutive fires and records execution history
+- Disabled rules now reset their consecutive fire count
+
+## v1.14.0 (2026-06-23)
+
+### Added
+- **SSE Connection Quality Metrics**: Track and expose connection health data
+  - `HermesSSE.getMetrics()` returns uptime, disconnection count, event rate, bandwidth, and message age
+  - `HermesSSE.resetMetrics()` clears accumulated metrics
+  - Rolling event rate calculation (events/second over 60-event window)
+  - Average event size tracking for bandwidth estimation
+  - Total bytes received counter
+- **SSE Bandwidth Monitoring**: Automatic tracking of data throughput
+  - Approximate byte count per event (UTF-16 encoding estimate)
+  - Rolling average event size
+  - Total uptime tracking across disconnections
+- **SSE Connection Diagnostics**: Disconnection count and last-message age tracking
+  - `disconnectionCount` -- total number of connection drops
+  - `lastMessageAge` -- ms since last received message (null if never connected)
+
+### Changed
+- SSE module header updated with v1.14.0 feature documentation
+- All event handlers now call `recordEvent` for bandwidth tracking
+- Connection error handler now increments `disconnectionCount` and accumulates uptime
+
+## v1.13.0 (2026-06-23)
+
+### Added
+- **Canvas Animation System**: Smooth animated chart transitions
+  - `HermesCharts.animate(duration, onProgress, onComplete, easing)` -- requestAnimationFrame-based animation
+  - `HermesCharts.Easing` object with `linear`, `easeOutCubic`, `easeInOutQuad`, `easeOutExpo` functions
+  - Returns a cancel function to abort animations
+- **Responsive Auto-Resize**: ResizeObserver-based automatic chart redraw
+  - `HermesCharts.enableAutoResize(canvas, redrawFn)` -- observe container size changes
+  - `HermesCharts.disableAutoResize(canvas)` -- stop observing
+  - Debounced via rAF to prevent layout thrashing
+- **Data Point Hover Highlight**: Interactive crosshair and point highlighting on hover
+  - `HermesCharts.drawCrosshair(ctx, x, chartTop, chartBottom, color)` -- dashed vertical guide
+  - `HermesCharts.drawHighlightPoint(ctx, x, y, color, radius)` -- glow ring around hovered point
+  - Enhanced `attachTooltip` with crosshair drawing and redrawing on mouseleave
+- **Chart Export**: Export charts as PNG images
+  - `HermesCharts.exportToPNG(canvas)` -- returns data URL
+  - `HermesCharts.downloadChart(canvas, filename)` -- triggers file download
+
+### Changed
+- `attachTooltip` now accepts an optional `drawFn` parameter for real-time highlight redraws
+- Tooltip mouseleave handler now triggers a full redraw to clear highlights
+- Charts module header updated with complete chart type listing
+
 ## v1.12.0 (2026-06-22)
 
 ### Added

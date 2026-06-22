@@ -64,16 +64,5 @@
     "cooldownMs": 300000,
     "message": "活跃连接数异常: {{value}} 个",
     "createdAt": "2026-06-22T01:37:08.495Z"
-  },
-  {
-    "id": "test-rule-1",
-    "name": "Test Rule",
-    "type": "token_threshold",
-    "enabled": true,
-    "level": "warning",
-    "threshold": 50000000,
-    "cooldownMs": 60000,
-    "message": "{{type}} 超过阈值: {{value}}",
-    "createdAt": "2026-06-22T01:37:34.302Z"
   }
 ]

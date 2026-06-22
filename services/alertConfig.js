@@ -9,6 +9,12 @@
  * - Per-rule enable/disable toggle
  * - Cooldown period per rule
  * - Runtime rule evaluation
+ *
+ * v1.15.0 enhancements:
+ * - Comprehensive rule validation with detailed error messages
+ * - Batch operations: bulk enable/disable, bulk delete
+ * - Notification cooldown with exponential backoff per rule
+ * - Rule execution history tracking
  */
 
 const fs = require('fs');
@@ -175,6 +181,12 @@ function getRuleById(id) {
  * @throws {Error} If id already exists or type is invalid
  */
 function createRule(ruleData) {
+  // v1.15.0: Use structured validation
+  const validation = validateRule(ruleData);
+  if (!validation.valid) {
+    throw new Error(`验证失败: ${validation.errors.join('; ')}`);
+  }
+
   const rules = loadRules();
 
   if (rules.find(r => r.id === ruleData.id)) {
@@ -256,8 +268,200 @@ function resetToDefaults() {
 }
 
 // ============================
-// Rule evaluation engine
+// v1.15.0: Rule Validation
 // ============================
+
+/**
+ * Validate a rule data object before create/update.
+ * @param {Object} ruleData - Rule definition to validate
+ * @param {boolean} [isUpdate=false] - Whether this is an update (allows partial)
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+function validateRule(ruleData, isUpdate = false) {
+  const errors = [];
+
+  const validTypes = ['token_threshold', 'error_rate', 'latency', 'connection_count'];
+  const validLevels = ['warning', 'critical', 'info'];
+
+  if (!isUpdate) {
+    if (!ruleData.id || typeof ruleData.id !== 'string' || ruleData.id.trim().length === 0) {
+      errors.push('id is required and must be a non-empty string');
+    }
+  }
+
+  if (ruleData.type !== undefined && !validTypes.includes(ruleData.type)) {
+    errors.push(`type must be one of: ${validTypes.join(', ')}`);
+  }
+
+  if (ruleData.level !== undefined && !validLevels.includes(ruleData.level)) {
+    errors.push(`level must be one of: ${validLevels.join(', ')}`);
+  }
+
+  if (ruleData.threshold !== undefined) {
+    if (typeof ruleData.threshold !== 'number' || ruleData.threshold < 0) {
+      errors.push('threshold must be a non-negative number');
+    }
+  }
+
+  if (ruleData.cooldownMs !== undefined) {
+    if (typeof ruleData.cooldownMs !== 'number' || ruleData.cooldownMs < 1000) {
+      errors.push('cooldownMs must be a number >= 1000 (1 second minimum)');
+    }
+  }
+
+  if (ruleData.name !== undefined && typeof ruleData.name !== 'string') {
+    errors.push('name must be a string');
+  }
+
+  if (ruleData.message !== undefined && typeof ruleData.message !== 'string') {
+    errors.push('message must be a string');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ============================
+// v1.15.0: Batch Operations
+// ============================
+
+/**
+ * Bulk enable or disable multiple rules.
+ * @param {string[]} ruleIds - Array of rule IDs to update
+ * @param {boolean} enabled - Whether to enable or disable
+ * @returns {{ updated: string[], notFound: string[] }}
+ */
+function batchSetEnabled(ruleIds, enabled) {
+  const rules = loadRules();
+  const updated = [];
+  const notFound = [];
+
+  for (const id of ruleIds) {
+    const index = rules.findIndex(r => r.id === id);
+    if (index === -1) {
+      notFound.push(id);
+      continue;
+    }
+    rules[index].enabled = enabled;
+    rules[index].updatedAt = new Date().toISOString();
+    updated.push(id);
+  }
+
+  if (updated.length > 0) {
+    cachedRules = rules;
+    saveRules(rules);
+  }
+
+  return { updated, notFound };
+}
+
+/**
+ * Bulk delete multiple rules.
+ * @param {string[]} ruleIds - Array of rule IDs to delete
+ * @returns {{ deleted: string[], notFound: string[] }}
+ */
+function batchDeleteRules(ruleIds) {
+  const rules = loadRules();
+  const deleted = [];
+  const notFound = [];
+
+  for (const id of ruleIds) {
+    const index = rules.findIndex(r => r.id === id);
+    if (index === -1) {
+      notFound.push(id);
+      continue;
+    }
+    rules.splice(index, 1);
+    lastFiredMap.delete(id);
+    executionHistory.delete(id);
+    deleted.push(id);
+  }
+
+  if (deleted.length > 0) {
+    cachedRules = rules;
+    saveRules(rules);
+  }
+
+  return { deleted, notFound };
+}
+
+// ============================
+// v1.15.0: Rule Execution History
+// ============================
+
+/**
+ * Execution history per rule (ring buffer of last 50 events).
+ * @type {Map<string, Array<{ timestamp: string, value: number, threshold: number }>>}
+ */
+const executionHistory = new Map();
+
+const MAX_HISTORY_PER_RULE = 50;
+
+/**
+ * Record a rule execution event.
+ * @param {string} ruleId
+ * @param {number} value - The measured value that triggered
+ * @param {number} threshold - The rule threshold
+ */
+function recordExecution(ruleId, value, threshold) {
+  if (!executionHistory.has(ruleId)) {
+    executionHistory.set(ruleId, []);
+  }
+  const history = executionHistory.get(ruleId);
+  history.push({
+    timestamp: new Date().toISOString(),
+    value,
+    threshold,
+  });
+  if (history.length > MAX_HISTORY_PER_RULE) {
+    history.shift();
+  }
+}
+
+/**
+ * Get execution history for a rule.
+ * @param {string} ruleId
+ * @returns {Array} History entries
+ */
+function getExecutionHistory(ruleId) {
+  return executionHistory.get(ruleId) || [];
+}
+
+/**
+ * Get execution history for all rules.
+ * @returns {Object} Map of ruleId -> history[]
+ */
+function getAllExecutionHistory() {
+  const result = {};
+  for (const [id, history] of executionHistory) {
+    result[id] = history;
+  }
+  return result;
+}
+
+// ============================
+// v1.15.0: Enhanced Cooldown with Backoff
+// ============================
+
+/**
+ * Track consecutive fires per rule for exponential backoff.
+ * @type {Map<string, number>}
+ */
+const consecutiveFireCount = new Map();
+
+/**
+ * Calculate the effective cooldown for a rule, applying exponential backoff
+ * when a rule fires repeatedly.
+ * @param {Object} rule
+ * @returns {number} Effective cooldown in ms
+ */
+function getEffectiveCooldown(rule) {
+  const count = consecutiveFireCount.get(rule.id) || 0;
+  if (count <= 1) return rule.cooldownMs;
+
+  // Cap backoff at 5x the base cooldown
+  const multiplier = Math.min(Math.pow(1.5, count - 1), 5);
+  return Math.round(rule.cooldownMs * multiplier);
+}
 
 /**
  * Evaluate all enabled rules against a status summary.
@@ -273,14 +477,23 @@ function evaluateRules(summary) {
   const fired = [];
 
   for (const rule of rules) {
-    if (!rule.enabled) continue;
+    if (!rule.enabled) {
+      // Reset consecutive fire count when rule is disabled
+      consecutiveFireCount.delete(rule.id);
+      continue;
+    }
 
-    // Per-rule cooldown check
+    // Per-rule cooldown check (v1.15.0: with exponential backoff)
     const lastFired = lastFiredMap.get(rule.id) || 0;
-    if (now - lastFired < rule.cooldownMs) continue;
+    const effectiveCooldown = getEffectiveCooldown(rule);
+    if (now - lastFired < effectiveCooldown) continue;
 
     const value = extractValue(summary, rule.type);
-    if (value === null) continue;
+    if (value === null) {
+      // Reset consecutive count if value not available
+      consecutiveFireCount.set(rule.id, 0);
+      continue;
+    }
 
     if (value >= rule.threshold) {
       const displayValue = formatValue(value, rule.type);
@@ -298,6 +511,13 @@ function evaluateRules(summary) {
       });
 
       lastFiredMap.set(rule.id, now);
+      // v1.15.0: Track consecutive fires for backoff
+      consecutiveFireCount.set(rule.id, (consecutiveFireCount.get(rule.id) || 0) + 1);
+      // v1.15.0: Record execution history
+      recordExecution(rule.id, value, rule.threshold);
+    } else {
+      // Reset consecutive fire count when threshold is no longer exceeded
+      consecutiveFireCount.set(rule.id, 0);
     }
   }
 
@@ -355,4 +575,11 @@ module.exports = {
   resetToDefaults,
   evaluateRules,
   loadRules,
+  // v1.15.0 additions
+  validateRule,
+  batchSetEnabled,
+  batchDeleteRules,
+  getExecutionHistory,
+  getAllExecutionHistory,
+  getEffectiveCooldown,
 };

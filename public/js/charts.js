@@ -7,6 +7,15 @@
  *  - 面积图（双数据集叠加）
  *  - 环形饼图（带发光效果）
  *  - 环形进度图（单个 Agent 进度）
+ *  - 水平条形图
+ *  - 仪表盘图
+ *  - 迷你折线图（Sparkline）
+ *
+ * v1.13.0 enhancements:
+ *  - Animated chart drawing with easing functions
+ *  - ResizeObserver-based auto-resize for responsive charts
+ *  - Data point hover highlighting with crosshair guide
+ *  - Chart export to PNG
  */
 
 // 图表命名空间，避免全局污染
@@ -855,6 +864,7 @@ const HermesCharts = (() => {
 
       const padding = { top: 20, right: 20, bottom: 35, left: 50 };
       const chartW = rect.width - padding.left - padding.right;
+      const chartH = rect.height - padding.top - padding.bottom;
 
       // Find nearest data index
       const relX = mouseX - padding.left;
@@ -877,10 +887,196 @@ const HermesCharts = (() => {
         html += `<div>总计: ${formatTokens(item.totalTokens)}</div>`;
       }
 
+      // v1.13.0: Draw crosshair and highlight on chart
+      if (drawFn && typeof drawFn === 'function') {
+        drawFn();
+        const { ctx } = setupCanvas(canvas);
+        const pointX = padding.left + (idx / (data.length - 1)) * chartW;
+        drawCrosshair(ctx, pointX, padding.top, padding.top + chartH);
+
+        // Highlight the nearest data point
+        if (item.success !== undefined) {
+          const maxVal = Math.max(...data.map(d => d.success)) * 1.15;
+          const pointY = padding.top + chartH - (item.success / maxVal) * chartH;
+          drawHighlightPoint(ctx, pointX, pointY, COLORS.primary);
+        } else if (item.inputTokens !== undefined) {
+          const maxVal = Math.max(...data.map(d => d.inputTokens)) * 1.15;
+          const pointY = padding.top + chartH - (item.inputTokens / maxVal) * chartH;
+          drawHighlightPoint(ctx, pointX, pointY, COLORS.cyan);
+        }
+      }
+
       showTooltip(canvas, mouseX, mouseY, html);
     });
 
-    canvas.addEventListener('mouseleave', hideTooltip);
+    canvas.addEventListener('mouseleave', () => {
+      hideTooltip();
+      // Redraw chart without highlight
+      if (drawFn && typeof drawFn === 'function') drawFn();
+    });
+  }
+
+  // ============================
+  // v1.13.0: Animation System
+  // ============================
+
+  /**
+   * Easing functions for chart animations
+   */
+  const Easing = {
+    linear: (t) => t,
+    easeOutCubic: (t) => 1 - Math.pow(1 - t, 3),
+    easeInOutQuad: (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+    easeOutExpo: (t) => t === 1 ? 1 : 1 - Math.pow(2, -10 * t),
+  };
+
+  /**
+   * Animate a value from 0 to 1 over a duration
+   * @param {number} duration - Duration in ms
+   * @param {Function} onProgress - Called with eased progress (0-1)
+   * @param {Function} onComplete - Called when animation finishes
+   * @param {string} [easing='easeOutCubic'] - Easing function name
+   */
+  function animate(duration, onProgress, onComplete, easing = 'easeOutCubic') {
+    const easingFn = Easing[easing] || Easing.easeOutCubic;
+    const start = performance.now();
+    let rafId = null;
+
+    function tick(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const easedProgress = easingFn(progress);
+
+      onProgress(easedProgress);
+
+      if (progress < 1) {
+        rafId = requestAnimationFrame(tick);
+      } else if (onComplete) {
+        onComplete();
+      }
+    }
+
+    rafId = requestAnimationFrame(tick);
+    return () => { if (rafId) cancelAnimationFrame(rafId); };
+  }
+
+  // ============================
+  // v1.13.0: ResizeObserver Auto-Resize
+  // ============================
+
+  /** Map of observed canvases to their redraw callbacks */
+  const observedCanvases = new Map();
+  let resizeObserver = null;
+
+  /**
+   * Register a canvas for auto-resize on container size change.
+   * @param {HTMLCanvasElement} canvas
+   * @param {Function} redrawFn - Called to redraw when canvas resizes
+   */
+  function enableAutoResize(canvas, redrawFn) {
+    if (!resizeObserver) {
+      resizeObserver = new ResizeObserver((entries) => {
+        // Debounce via rAF
+        requestAnimationFrame(() => {
+          for (const entry of entries) {
+            const callback = observedCanvases.get(entry.target);
+            if (callback) callback();
+          }
+        });
+      });
+    }
+    observedCanvases.set(canvas, redrawFn);
+    resizeObserver.observe(canvas.parentElement || canvas);
+  }
+
+  /**
+   * Stop observing a canvas for auto-resize.
+   * @param {HTMLCanvasElement} canvas
+   */
+  function disableAutoResize(canvas) {
+    observedCanvases.delete(canvas);
+    if (resizeObserver) {
+      resizeObserver.unobserve(canvas.parentElement || canvas);
+    }
+  }
+
+  // ============================
+  // v1.13.0: Data Point Hover Highlight
+  // ============================
+
+  /**
+   * Draw a vertical crosshair line at the hovered data point
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - X position of the crosshair
+   * @param {number} chartTop - Top of the chart area
+   * @param {number} chartBottom - Bottom of the chart area
+   * @param {string} [color] - Crosshair color
+   */
+  function drawCrosshair(ctx, x, chartTop, chartBottom, color = 'rgba(0, 212, 170, 0.3)') {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, chartTop);
+    ctx.lineTo(x, chartBottom);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  /**
+   * Draw a highlighted circle around the nearest data point
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x - Point X
+   * @param {number} y - Point Y
+   * @param {string} color - Point color
+   * @param {number} [radius=6] - Outer ring radius
+   */
+  function drawHighlightPoint(ctx, x, y, color, radius = 6) {
+    ctx.save();
+    // Outer glow ring
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = color + '30';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Inner filled dot
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 0.45, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ============================
+  // v1.13.0: Chart Export to PNG
+  // ============================
+
+  /**
+   * Export a canvas chart as a PNG data URL
+   * @param {HTMLCanvasElement} canvas
+   * @returns {string} PNG data URL
+   */
+  function exportToPNG(canvas) {
+    return canvas.toDataURL('image/png');
+  }
+
+  /**
+   * Download the chart as a PNG file
+   * @param {HTMLCanvasElement} canvas
+   * @param {string} [filename='hermes-chart.png']
+   */
+  function downloadChart(canvas, filename = 'hermes-chart.png') {
+    const dataUrl = exportToPNG(canvas);
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   // ============================
@@ -901,6 +1097,15 @@ const HermesCharts = (() => {
     formatNumber,
     formatTokens,
     COLORS,
+    // v1.13.0 additions
+    animate,
+    Easing,
+    enableAutoResize,
+    disableAutoResize,
+    drawCrosshair,
+    drawHighlightPoint,
+    exportToPNG,
+    downloadChart,
   };
 
 })();

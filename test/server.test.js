@@ -353,6 +353,23 @@ describe('Alert Rule API', () => {
     });
   }
 
+  function deleteJSON(path) {
+    return new Promise((resolve, reject) => {
+      const req = http.request(`${baseUrl}${path}`, {
+        method: 'DELETE',
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+          catch (e) { reject(new Error(`JSON parse failed: ${data.slice(0, 200)}`)); }
+        });
+      });
+      req.on('error', reject);
+      req.end();
+    });
+  }
+
   it('GET /api/alerts/rules returns array', async () => {
     const { status, body } = await getJSON('/api/alerts/rules');
     assert.equal(status, 200);
@@ -362,6 +379,9 @@ describe('Alert Rule API', () => {
   });
 
   it('POST /api/alerts/rules creates a rule', async () => {
+    // Clean up any stale test rule from previous runs
+    await deleteJSON('/api/alerts/rules/test-rule-1').catch(() => {});
+
     const { status, body } = await postJSON('/api/alerts/rules', {
       id: 'test-rule-1',
       name: 'Test Rule',
@@ -373,6 +393,10 @@ describe('Alert Rule API', () => {
     assert.equal(status, 201);
     assert.equal(body.success, true);
     assert.equal(body.data.id, 'test-rule-1');
+
+    // Cleanup: delete the test rule
+    const del = await deleteJSON('/api/alerts/rules/test-rule-1');
+    assert.equal(del.status, 200);
   });
 
   it('GET /api/reports returns all reports', async () => {

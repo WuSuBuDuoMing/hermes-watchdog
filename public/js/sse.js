@@ -3,6 +3,12 @@
  *
  * 负责与服务端建立 Server-Sent Events 连接
  * 自动重连、事件分发、状态管理
+ *
+ * v1.14.0 enhancements:
+ *  - Connection quality metrics (latency, uptime, throughput)
+ *  - Bandwidth monitoring and event rate tracking
+ *  - Connection status summary API
+ *  - Graceful degradation with max reconnection backoff display
  */
 
 const HermesSSE = (() => {
@@ -38,6 +44,19 @@ const HermesSSE = (() => {
   let reconnectTimer = null;      // Pending reconnect timer
   let lastMessageTime = 0;        // Timestamp of last message received
 
+  // v1.14.0: Connection quality metrics
+  let metrics = {
+    connectedAt: null,            // When the connection was established
+    totalUptime: 0,               // Total connected time (ms)
+    disconnectionCount: 0,        // Number of disconnections
+    totalEventsReceived: 0,       // Total SSE events received
+    totalBytesReceived: 0,        // Approximate bytes received
+    lastEventTime: 0,             // Timestamp of last event
+    eventRate: 0,                 // Events per second (rolling)
+    avgEventSize: 0,              // Average event size in bytes (rolling)
+    _eventTimestamps: [],         // Rolling window for rate calculation
+  };
+
   // ============================
   // Public methods
   // ============================
@@ -72,6 +91,8 @@ const HermesSSE = (() => {
       isConnected = true;
       reconnectAttempts = 0;
       lastMessageTime = Date.now();
+      metrics.connectedAt = Date.now();
+      recordEvent(e.data);
       emit('connection_change', { connected: true });
     });
 
@@ -79,6 +100,7 @@ const HermesSSE = (() => {
     eventSource.addEventListener('status_update', (e) => {
       lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
+      recordEvent(e.data);
       emit('status_update', data);
     });
 
@@ -86,6 +108,7 @@ const HermesSSE = (() => {
     eventSource.addEventListener('token_update', (e) => {
       lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
+      recordEvent(e.data);
       emit('token_update', data);
     });
 
@@ -93,6 +116,7 @@ const HermesSSE = (() => {
     eventSource.addEventListener('new_conversation', (e) => {
       lastMessageTime = Date.now();
       const data = JSON.parse(e.data);
+      recordEvent(e.data);
       emit('new_conversation', data);
     });
 
@@ -100,6 +124,10 @@ const HermesSSE = (() => {
     eventSource.onerror = () => {
       console.warn('[SSE] Connection lost');
       isConnected = false;
+      metrics.disconnectionCount++;
+      if (metrics.connectedAt) {
+        metrics.totalUptime += Date.now() - metrics.connectedAt;
+      }
       emit('connection_change', { connected: false });
 
       eventSource.close();
@@ -198,6 +226,75 @@ const HermesSSE = (() => {
   }
 
   // ============================
+  // v1.14.0: Connection Quality Metrics
+  // ============================
+
+  /**
+   * Record an incoming event for bandwidth tracking
+   * @param {string} raw - Raw event data string
+   */
+  function recordEvent(raw) {
+    metrics.totalEventsReceived++;
+    const size = (raw || '').length * 2; // Approximate UTF-16 bytes
+    metrics.totalBytesReceived += size;
+    metrics.lastEventTime = Date.now();
+
+    // Rolling rate calculation (keep last 60 timestamps)
+    const now = Date.now();
+    metrics._eventTimestamps.push(now);
+    while (metrics._eventTimestamps.length > 60) {
+      metrics._eventTimestamps.shift();
+    }
+
+    // Events per second over rolling window
+    if (metrics._eventTimestamps.length >= 2) {
+      const windowMs = now - metrics._eventTimestamps[0];
+      metrics.eventRate = windowMs > 0
+        ? Math.round((metrics._eventTimestamps.length / windowMs) * 1000 * 10) / 10
+        : 0;
+    }
+
+    // Rolling average event size
+    metrics.avgEventSize = Math.round(metrics.totalBytesReceived / metrics.totalEventsReceived);
+  }
+
+  /**
+   * Get current connection quality metrics
+   * @returns {Object} Metrics snapshot
+   */
+  function getMetrics() {
+    const uptime = metrics.connectedAt && isConnected
+      ? Date.now() - metrics.connectedAt
+      : metrics.totalUptime;
+
+    return {
+      isConnected,
+      reconnectAttempts,
+      uptime,
+      totalUptime: metrics.totalUptime,
+      disconnectionCount: metrics.disconnectionCount,
+      totalEventsReceived: metrics.totalEventsReceived,
+      totalBytesReceived: metrics.totalBytesReceived,
+      eventRate: metrics.eventRate,
+      avgEventSize: metrics.avgEventSize,
+      lastMessageAge: lastMessageTime > 0 ? Date.now() - lastMessageTime : null,
+    };
+  }
+
+  /**
+   * Reset connection metrics
+   */
+  function resetMetrics() {
+    metrics.totalUptime = 0;
+    metrics.disconnectionCount = 0;
+    metrics.totalEventsReceived = 0;
+    metrics.totalBytesReceived = 0;
+    metrics.eventRate = 0;
+    metrics.avgEventSize = 0;
+    metrics._eventTimestamps = [];
+  }
+
+  // ============================
   // 内部方法
   // ============================
 
@@ -225,6 +322,9 @@ const HermesSSE = (() => {
     on,
     off,
     isConnected: getConnectionStatus,
+    // v1.14.0 additions
+    getMetrics,
+    resetMetrics,
   };
 
 })();
